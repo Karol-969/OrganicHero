@@ -1,0 +1,170 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: hsl(45, 50%, 98%);
+  --foreground: hsl(210, 8%, 22%);
+  --card: hsl(0, 0%, 100%);
+  --card-foreground: hsl(210, 8%, 22%);
+  --popover: hsl(0, 0%, 100%);
+  --popover-foreground: hsl(210, 8%, 22%);
+  --primary: hsl(215, 70%, 60%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(210, 8%, 96%);
+  --secondary-foreground: hsl(210, 8%, 22%);
+  --muted: hsl(210, 8%, 96%);
+  --muted-foreground: hsl(210, 8%, 55%);
+  --accent: hsl(215, 100%, 80%);
+  --accent-foreground: hsl(210, 8%, 22%);
+  --destructive: hsl(356.3033, 90.5579%, 54.3137%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(210, 12%, 87%);
+  --input: hsl(210, 12%, 87%);
+  --ring: hsl(215, 70%, 60%);
+  --chart-1: hsl(215, 70%, 60%);
+  --chart-2: hsl(215, 100%, 80%);
+  --chart-3: hsl(210, 8%, 85%);
+  --chart-4: hsl(45, 50%, 85%);
+  --chart-5: hsl(341.4894, 75.2000%, 50.9804%);
+  --sidebar: hsl(0, 0%, 100%);
+  --sidebar-foreground: hsl(210, 8%, 22%);
+  --sidebar-primary: hsl(215, 70%, 60%);
+  --sidebar-primary-foreground: hsl(0, 0%, 100%);
+  --sidebar-accent: hsl(215, 100%, 80%);
+  --sidebar-accent-foreground: hsl(210, 8%, 22%);
+  --sidebar-border: hsl(210, 12%, 87%);
+  --sidebar-ring: hsl(215, 70%, 60%);
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: hsl(0, 0%, 0%);
+  --foreground: hsl(200, 6.6667%, 91.1765%);
+  --card: hsl(228, 9.8039%, 10%);
+  --card-foreground: hsl(0, 0%, 85.0980%);
+  --popover: hsl(0, 0%, 0%);
+  --popover-foreground: hsl(200, 6.6667%, 91.1765%);
+  --primary: hsl(215, 70%, 60%);
+  --primary-foreground: hsl(0, 0%, 100%);
+  --secondary: hsl(195.0000, 15.3846%, 94.9020%);
+  --secondary-foreground: hsl(210, 25%, 7.8431%);
+  --muted: hsl(0, 0%, 9.4118%);
+  --muted-foreground: hsl(210, 3.3898%, 46.2745%);
+  --accent: hsl(205.7143, 70%, 7.8431%);
+  --accent-foreground: hsl(203.7736, 87.6033%, 52.5490%);
+  --destructive: hsl(356.3033, 90.5579%, 54.3137%);
+  --destructive-foreground: hsl(0, 0%, 100%);
+  --border: hsl(210, 5.2632%, 14.9020%);
+  --input: hsl(207.6923, 27.6596%, 18.4314%);
+  --ring: hsl(215, 70%, 60%);
+  --chart-1: hsl(215, 70%, 60%);
+  --chart-2: hsl(215, 100%, 80%);
+  --chart-3: hsl(210, 8%, 85%);
+  --chart-4: hsl(45, 50%, 85%);
+  --chart-5: hsl(341.4894, 75.2000%, 50.9804%);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+@layer components {
+  .nav-link.active {
+    @apply text-primary font-semibold;
+  }
+  
+  .accordion-content {
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.5s ease-in-out, opacity 0.3s ease-in-out;
+    opacity: 0;
+  }
+  
+  .accordion-content.expanded {
+    opacity: 1;
+  }
+  
+  .chart-container {
+    position: relative;
+    height: 300px;
+    width: 100%;
+    max-width: 300px;
+    margin: auto;
+  }
+  
+  .agent-card {
+    transition: all 0.3s ease;
+  }
+  
+  .agent-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 10px 25px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  }
+  
+  .pricing-card {
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .pricing-card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 20px 40px -12px rgb(0 0 0 / 0.15);
+  }
+  
+  .pricing-card.featured {
+    border: 2px solid hsl(var(--primary));
+    box-shadow: 0 0 0 1px hsl(var(--primary));
+  }
+  
+  .timeline-item::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 2px;
+    height: 100%;
+    background: hsl(var(--border));
+    transform: translateX(-50%);
+  }
+  
+  .timeline-dot {
+    position: relative;
+    z-index: 10;
+    background: hsl(var(--primary));
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin: 0 auto;
+  }
+  
+  @media (max-width: 768px) {
+    .timeline-item::before {
+      left: 12px;
+    }
+  }
+  
+  .scroll-fade-in {
+    opacity: 0;
+    transform: translateY(20px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+  
+  .scroll-fade-in.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
