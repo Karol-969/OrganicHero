@@ -5,94 +5,53 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Search, TrendingUp, Users, Target, CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
+import type { SEOAnalysisResult } from "@shared/schema";
 
-interface AnalysisResults {
-  seoScore: number;
-  domain: string;
-  competitors: Array<{
-    name: string;
-    score: number;
-    ranking: number;
-  }>;
-  keywords: Array<{
-    keyword: string;
-    position: number;
-    difficulty: string;
-    volume: number;
-  }>;
-  improvements: Array<{
-    title: string;
-    impact: 'high' | 'medium' | 'low';
-    description: string;
-  }>;
-  marketPosition: {
-    rank: number;
-    totalCompetitors: number;
-    marketShare: number;
-  };
-}
-
-const sampleResults: AnalysisResults = {
-  seoScore: 72,
-  domain: "example.com",
-  competitors: [
-    { name: "competitor1.com", score: 85, ranking: 1 },
-    { name: "competitor2.com", score: 78, ranking: 2 },
-    { name: "yoursite.com", score: 72, ranking: 3 },
-    { name: "competitor3.com", score: 69, ranking: 4 },
-  ],
-  keywords: [
-    { keyword: "digital marketing", position: 8, difficulty: "high", volume: 12000 },
-    { keyword: "seo services", position: 15, difficulty: "medium", volume: 8500 },
-    { keyword: "website optimization", position: 3, difficulty: "low", volume: 3200 },
-  ],
-  improvements: [
-    {
-      title: "Improve Page Load Speed",
-      impact: "high",
-      description: "Your pages take 4.2s to load. Optimize images and minify CSS/JS to improve Core Web Vitals."
-    },
-    {
-      title: "Add Missing Meta Descriptions", 
-      impact: "high",
-      description: "23 pages are missing meta descriptions. Add unique, compelling descriptions for each page."
-    },
-    {
-      title: "Build Quality Backlinks",
-      impact: "medium", 
-      description: "You have 45% fewer backlinks than top competitors. Focus on earning links from industry publications."
-    },
-    {
-      title: "Optimize for Local Search",
-      impact: "medium",
-      description: "Claim and optimize your Google Business Profile to improve local visibility."
-    }
-  ],
-  marketPosition: {
-    rank: 3,
-    totalCompetitors: 15,
-    marketShare: 12.5
-  }
-};
 
 export default function SEOAnalysis() {
   const [url, setUrl] = useState("");
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [results, setResults] = useState<AnalysisResults | null>(null);
+  const [results, setResults] = useState<SEOAnalysisResult | null>(null);
+  const { toast } = useToast();
+
+  const analyzeMutation = useMutation({
+    mutationFn: async (urlToAnalyze: string) => {
+      const response = await apiRequest('POST', '/api/analyze-seo', { url: urlToAnalyze });
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error || 'Failed to analyze website');
+      }
+      return response.json() as Promise<SEOAnalysisResult>;
+    },
+    onSuccess: (data) => {
+      setResults(data);
+      toast({
+        title: "Analysis Complete!",
+        description: `Successfully analyzed ${data.domain}. Your SEO score is ${data.seoScore}/100.`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Analysis Failed",
+        description: error.message || "Failed to analyze your website. Please try again.",
+        variant: "destructive",
+      });
+    }
+  });
 
   const handleAnalyze = async () => {
-    if (!url) return;
-    
-    setIsAnalyzing(true);
-    
-    // Simulate API call delay
-    setTimeout(() => {
-      setResults({
-        ...sampleResults,
-        domain: url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+    if (!url.trim()) {
+      toast({
+        title: "URL Required",
+        description: "Please enter a valid website URL to analyze.",
+        variant: "destructive",
       });
-      setIsAnalyzing(false);
-    }, 3000);
+      return;
+    }
+    
+    analyzeMutation.mutate(url.trim());
   };
 
   const getImpactColor = (impact: string) => {
@@ -147,14 +106,14 @@ export default function SEOAnalysis() {
                 />
                 <Button 
                   onClick={handleAnalyze}
-                  disabled={!url || isAnalyzing}
+                  disabled={!url || analyzeMutation.isPending}
                   className="sm:w-auto"
                   data-testid="analyze-button"
                 >
-                  {isAnalyzing ? "Analyzing..." : "Analyze Now"}
+                  {analyzeMutation.isPending ? "Analyzing..." : "Analyze Now"}
                 </Button>
               </div>
-              {isAnalyzing && (
+              {analyzeMutation.isPending && (
                 <div className="mt-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
@@ -190,15 +149,15 @@ export default function SEOAnalysis() {
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-sm text-muted-foreground">Technical SEO</span>
-                        <span className="font-medium">Good (78/100)</span>
+                        <span className="font-medium">{results.technicalSeo.score >= 80 ? 'Excellent' : results.technicalSeo.score >= 60 ? 'Good' : 'Needs Work'} ({results.technicalSeo.score}/100)</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Content Quality</span>
-                        <span className="font-medium">Excellent (92/100)</span>
+                        <span className="text-sm text-muted-foreground">Mobile Performance</span>
+                        <span className="font-medium">{results.pageSpeed.mobile >= 90 ? 'Excellent' : results.pageSpeed.mobile >= 70 ? 'Good' : 'Poor'} ({results.pageSpeed.mobile}/100)</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-sm text-muted-foreground">Backlink Profile</span>
-                        <span className="font-medium">Needs Work (45/100)</span>
+                        <span className="text-sm text-muted-foreground">Desktop Performance</span>
+                        <span className="font-medium">{results.pageSpeed.desktop >= 90 ? 'Excellent' : results.pageSpeed.desktop >= 70 ? 'Good' : 'Poor'} ({results.pageSpeed.desktop}/100)</span>
                       </div>
                     </div>
                   </div>
@@ -215,18 +174,21 @@ export default function SEOAnalysis() {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-4">
-                    {results.competitors.map((competitor, index) => (
-                      <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <Badge variant={index === 2 ? "default" : "secondary"}>#{competitor.ranking}</Badge>
-                          <span className={`font-medium ${index === 2 ? 'text-primary' : ''}`}>
-                            {competitor.name}
-                          </span>
-                          {index === 2 && <Badge variant="outline">Your Site</Badge>}
+                    {results.competitors.map((competitor, index) => {
+                      const isUserSite = competitor.name === results.domain;
+                      return (
+                        <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <Badge variant={isUserSite ? "default" : "secondary"}>#{competitor.ranking}</Badge>
+                            <span className={`font-medium ${isUserSite ? 'text-primary' : ''}`}>
+                              {competitor.name}
+                            </span>
+                            {isUserSite && <Badge variant="outline">Your Site</Badge>}
+                          </div>
+                          <div className="text-sm text-muted-foreground">Score: {competitor.score}/100</div>
                         </div>
-                        <div className="text-sm text-muted-foreground">Score: {competitor.score}/100</div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>
@@ -260,7 +222,10 @@ export default function SEOAnalysis() {
               {/* Top Keywords */}
               <Card>
                 <CardHeader>
-                  <CardTitle>Top Keywords Performance</CardTitle>
+                  <CardTitle>Keyword Analysis</CardTitle>
+                  <CardDescription>
+                    Estimated keyword performance based on domain analysis
+                  </CardDescription>
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-3">
@@ -271,11 +236,69 @@ export default function SEOAnalysis() {
                           <Badge variant="secondary" className="ml-2">{keyword.difficulty}</Badge>
                         </div>
                         <div className="text-right text-sm">
-                          <div className="font-medium">Position #{keyword.position}</div>
+                          {keyword.position && (
+                            <div className="font-medium">Position #{keyword.position}</div>
+                          )}
                           <div className="text-muted-foreground">{keyword.volume.toLocaleString()} searches/mo</div>
                         </div>
                       </div>
                     ))}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Page Speed Details */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Page Speed Analysis</CardTitle>
+                  <CardDescription>
+                    Core Web Vitals and performance metrics from Google PageSpeed Insights
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid md:grid-cols-2 gap-6">
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Performance Scores</h4>
+                      <div className="space-y-3">
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Mobile</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={results.pageSpeed.mobile} className="w-20" />
+                            <span className="font-medium">{results.pageSpeed.mobile}</span>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm">Desktop</span>
+                          <div className="flex items-center gap-2">
+                            <Progress value={results.pageSpeed.desktop} className="w-20" />
+                            <span className="font-medium">{results.pageSpeed.desktop}</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-4">
+                      <h4 className="font-medium">Core Web Vitals</h4>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <span>First Contentful Paint</span>
+                          <span className={results.pageSpeed.firstContentfulPaint > 1.8 ? 'text-red-500' : results.pageSpeed.firstContentfulPaint > 1.0 ? 'text-yellow-500' : 'text-green-500'}>
+                            {results.pageSpeed.firstContentfulPaint.toFixed(1)}s
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Largest Contentful Paint</span>
+                          <span className={results.pageSpeed.largestContentfulPaint > 2.5 ? 'text-red-500' : results.pageSpeed.largestContentfulPaint > 1.5 ? 'text-yellow-500' : 'text-green-500'}>
+                            {results.pageSpeed.largestContentfulPaint.toFixed(1)}s
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Cumulative Layout Shift</span>
+                          <span className={results.pageSpeed.cumulativeLayoutShift > 0.1 ? 'text-red-500' : results.pageSpeed.cumulativeLayoutShift > 0.05 ? 'text-yellow-500' : 'text-green-500'}>
+                            {results.pageSpeed.cumulativeLayoutShift.toFixed(3)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
