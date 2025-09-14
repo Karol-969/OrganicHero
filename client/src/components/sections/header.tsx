@@ -3,6 +3,7 @@ import { useScrollSpy } from "@/hooks/use-scroll-spy";
 import { Menu, X } from "lucide-react";
 
 const navItems = [
+  { href: "#analysis", label: "Try It Free" },
   { href: "#vision", label: "Vision" },
   { href: "#how-it-works", label: "How It Works" },
   { href: "#operations", label: "Core Operations" },

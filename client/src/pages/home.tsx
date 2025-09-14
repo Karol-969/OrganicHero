@@ -1,5 +1,6 @@
 import Header from "@/components/sections/header";
 import Hero from "@/components/sections/hero";
+import SEOAnalysis from "@/components/sections/seo-analysis";
 import Vision from "@/components/sections/vision";
 import HowItWorks from "@/components/sections/how-it-works";
 import CoreOperations from "@/components/sections/core-operations";
@@ -14,6 +15,7 @@ export default function Home() {
       <Header />
       <main>
         <Hero />
+        <SEOAnalysis />
         <Vision />
         <HowItWorks />
         <CoreOperations />
