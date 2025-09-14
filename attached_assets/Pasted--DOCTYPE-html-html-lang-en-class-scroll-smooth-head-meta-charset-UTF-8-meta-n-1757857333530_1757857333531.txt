@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organic Hero | Interactive Business Plan</title>
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The SPA is structured as a single, scrollable page with a sticky navigation bar to allow users (investors, potential customers, team members) to easily jump between key sections of the business plan. This non-linear structure is more engaging than a simple document. The architecture is broken down into: Vision (high-level summary), How It Works (interactive diagrams of the AI system), Core Operations (detailed SEO features in an accordion), The Product (UI/UX mockups and implementation details), Business Strategy (monetization, go-to-market), and Roadmap (interactive timeline). This structure prioritizes user understanding by grouping related information thematically and using interactive elements to simplify complex concepts. -->
+    <!-- Visualization & Content Choices: 
+        - Business Vision (Goal: Inform): Presented with clear, concise text and prominent stats.
+        - Architecture Diagram (Goal: Organize): Built with HTML/CSS divs and flexbox to visually represent the multi-agent system. Interaction: Hover effects highlight each agent. Method: HTML/CSS.
+        - Workflow (Goal: Organize): A numbered, step-by-step visual flow. Interaction: Subtle animations on scroll. Method: HTML/CSS.
+        - Core SEO Operations (Goal: Organize/Inform): An interactive accordion to manage a large amount of detailed information without overwhelming the user. Interaction: Click to expand/collapse. Method: JS.
+        - Real-Time Dashboard Mockup (Goal: Inform/Illustrate): A placeholder doughnut chart demonstrates the product's analytical capabilities. Library: Chart.js (Canvas).
+        - Monetization Model (Goal: Compare): A classic 3-tier pricing table for easy comparison. Method: HTML/CSS Grid.
+        - Product Roadmap (Goal: Change/Organize): A vertical timeline to clearly show progression through phases. Method: HTML/CSS.
+        - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8;
+            color: #383838;
+        }
+        .nav-link.active {
+            color: #4A90E2;
+            font-weight: 600;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.5s ease-in-out;
+        }
+        .chart-container {
+            position: relative;
+            height: 300px;
+            width: 100%;
+            max-width: 300px;
+            margin: auto;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- Header & Navigation -->
+    <header class="bg-white/80 backdrop-blur-lg sticky top-0 z-50 shadow-sm">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="text-2xl font-bold text-gray-800">
+                    🚀 Organic <span class="text-blue-500">Hero</span>
+                </div>
+                <nav class="hidden md:flex space-x-8 text-gray-600 font-medium">
+                    <a href="#vision" class="nav-link hover:text-blue-500 transition-colors">Vision</a>
+                    <a href="#how-it-works" class="nav-link hover:text-blue-500 transition-colors">How It Works</a>
+                    <a href="#operations" class="nav-link hover:text-blue-500 transition-colors">Core Operations</a>
+                    <a href="#product" class="nav-link hover:text-blue-500 transition-colors">The Product</a>
+                    <a href="#business" class="nav-link hover:text-blue-500 transition-colors">Business Plan</a>
+                    <a href="#roadmap" class="nav-link hover:text-blue-500 transition-colors">Roadmap</a>
+                </nav>
+                 <button id="mobile-menu-button" class="md:hidden text-gray-800">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path></svg>
+                </button>
+            </div>
+        </div>
+        <!-- Mobile Menu -->
+        <div id="mobile-menu" class="hidden md:hidden px-6 pb-4">
+            <a href="#vision" class="block py-2 nav-link hover:text-blue-500 transition-colors">Vision</a>
+            <a href="#how-it-works" class="block py-2 nav-link hover:text-blue-500 transition-colors">How It Works</a>
+            <a href="#operations" class="block py-2 nav-link hover:text-blue-500 transition-colors">Core Operations</a>
+            <a href="#product" class="block py-2 nav-link hover:text-blue-500 transition-colors">The Product</a>
+            <a href="#business" class="block py-2 nav-link hover:text-blue-500 transition-colors">Business Plan</a>
+            <a href="#roadmap" class="block py-2 nav-link hover:text-blue-500 transition-colors">Roadmap</a>
+        </div>
+    </header>
+
+    <main>
+        <!-- Hero Section -->
+        <section id="hero" class="py-20 md:py-32 bg-white">
+            <div class="container mx-auto px-6 text-center">
+                <h1 class="text-4xl md:text-6xl font-bold text-gray-800 leading-tight">Achieve #1 Google Rankings, Autonomously.</h1>
+                <p class="mt-6 text-lg md:text-xl text-gray-600 max-w-3xl mx-auto">Organic Hero is your AI-powered SEO expert, delivering a complete, actionable strategy to turn your website into a top-ranking organic traffic engine.</p>
+                <a href="#how-it-works" class="mt-8 inline-block bg-blue-500 text-white font-semibold py-3 px-8 rounded-lg shadow-lg hover:bg-blue-600 transition-all transform hover:scale-105">Discover How It Works</a>
+            </div>
+        </section>
+
+        <!-- Vision Section -->
+        <section id="vision" class="py-20">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Our Vision: Democratizing SEO</h2>
+                    <p class="mt-4 text-gray-600 max-w-2xl mx-auto">We're leveling the playing field. Organic Hero provides the power of a professional SEO agency to small and medium-sized businesses at a fraction of the cost, making top search rankings accessible to everyone.</p>
+                </div>
+                <div class="grid md:grid-cols-2 gap-8 items-center">
+                    <div class="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                        <h3 class="text-2xl font-semibold text-gray-800">The Problem</h3>
+                        <p class="mt-2 text-gray-600">Most businesses struggle with the complexity and cost of SEO. They lack the time and expertise for in-depth keyword research, competitor analysis, and technical optimization, leaving them behind in search results.</p>
+                    </div>
+                    <div class="bg-white p-8 rounded-xl shadow-md border border-gray-100">
+                        <h3 class="text-2xl font-semibold text-gray-800">The Solution</h3>
+                        <p class="mt-2 text-gray-600">Organic Hero addresses this by using a multi-agent AI system to perform these tasks automatically, delivering a detailed, personalized plan for organic growth.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- How It Works Section -->
+        <section id="how-it-works" class="py-20 bg-gray-50">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-800">How It Works: A Multi-Agent System</h2>
+                    <p class="mt-4 text-gray-600 max-w-2xl mx-auto">Organic Hero is powered by a team of specialized AI agents working together to analyze, strategize, and optimize your website.</p>
+                </div>
+
+                <!-- Architectural Diagram -->
+                <div class="relative max-w-5xl mx-auto my-12 hidden md:block">
+                    <div class="flex items-center justify-center p-6 bg-blue-500 rounded-full text-white font-bold text-sm h-24 w-24 mx-auto mb-16 shadow-lg">
+                        User Input
+                    </div>
+                    <div class="flex justify-center mb-16">
+                        <div class="relative w-full">
+                            <div class="absolute inset-0 flex items-center justify-center">
+                                <div class="w-full h-1 bg-gray-300"></div>
+                                <span class="absolute text-center bg-gray-300 rounded-full h-8 w-8 -right-4">↓</span>
+                            </div>
+                            <div class="relative z-10 text-center bg-white p-4 rounded-xl shadow-lg border border-gray-100 transition-transform hover:scale-105">
+                                <h3 class="text-xl font-semibold text-gray-800">Organic Hero Supervisor Agent</h3>
+                                <p class="text-gray-500 text-sm mt-1">Orchestrates and delegates all tasks.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-8">
+                        <div class="relative z-10 text-center bg-white p-4 rounded-xl shadow-lg border border-gray-100 transition-transform hover:scale-105">
+                            <h3 class="text-xl font-semibold text-gray-800">On-Page Auditor</h3>
+                            <p class="text-gray-500 text-sm mt-1">Analyzes URL & SEO Fundamentals.</p>
+                        </div>
+                        <div class="relative z-10 text-center bg-white p-4 rounded-xl shadow-lg border border-gray-100 transition-transform hover:scale-105">
+                            <h3 class="text-xl font-semibold text-gray-800">Keyword Analyst</h3>
+                            <p class="text-gray-500 text-sm mt-1">Researches keywords & competitors.</p>
+                        </div>
+                        <div class="relative z-10 text-center bg-white p-4 rounded-xl shadow-lg border border-gray-100 transition-transform hover:scale-105">
+                            <h3 class="text-xl font-semibold text-gray-800">Content Strategist</h3>
+                            <p class="text-gray-500 text-sm mt-1">Generates content & title ideas.</p>
+                        </div>
+                        <div class="relative z-10 text-center bg-white p-4 rounded-xl shadow-lg border border-gray-100 transition-transform hover:scale-105">
+                            <h3 class="text-xl font-semibold text-gray-800">Link & Local SEO Agent</h3>
+                            <p class="text-gray-500 text-sm mt-1">Suggests backlinks & local tactics.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Workflow Diagram for Mobile -->
+                <div class="md:hidden">
+                    <div class="flex flex-col items-center">
+                        <div class="p-4 bg-blue-500 text-white rounded-full font-bold text-sm mb-4">User Input</div>
+                        <div class="h-8 w-1 bg-gray-300"></div>
+                        <div class="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-center">
+                            <h3 class="text-xl font-semibold text-gray-800">Supervisor Agent</h3>
+                        </div>
+                        <div class="h-8 w-1 bg-gray-300"></div>
+                        <div class="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-center">
+                            <h3 class="text-xl font-semibold text-gray-800">On-Page Auditor</h3>
+                        </div>
+                        <div class="h-8 w-1 bg-gray-300"></div>
+                        <div class="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-center">
+                            <h3 class="text-xl font-semibold text-gray-800">Keyword Analyst</h3>
+                        </div>
+                        <div class="h-8 w-1 bg-gray-300"></div>
+                        <div class="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-center">
+                            <h3 class="text-xl font-semibold text-gray-800">Content Strategist</h3>
+                        </div>
+                        <div class="h-8 w-1 bg-gray-300"></div>
+                        <div class="mt-4 p-4 bg-white rounded-xl shadow-lg border border-gray-100 text-center">
+                            <h3 class="text-xl font-semibold text-gray-800">Link & Local SEO Agent</h3>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Core Operations Section -->
+        <section id="operations" class="py-20">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-800">The Operations That Get You to #1</h2>
+                    <p class="mt-4 text-gray-600 max-w-2xl mx-auto">Our agent doesn't just analyze; it executes a proven strategy that covers every aspect of modern SEO.</p>
+                </div>
+                <div id="accordion-container" class="max-w-4xl mx-auto">
+                    <!-- Advanced Technical Audits -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Advanced Technical Audits</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Core Web Vitals:** Provides specific recommendations to improve page loading speed, interactivity, and visual stability.</li>
+                                <li>**Crawlability:** Analyzes `robots.txt` and sitemap files to ensure all important pages can be found and indexed.</li>
+                                <li>**Structured Data & Schema:** Identifies opportunities to use schema markup for rich snippets and better understanding.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Semantic SEO -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Semantic SEO & Content Gaps</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Entity Optimization:** Moves beyond basic keywords to analyze and enrich your content for topical authority.</li>
+                                <li>**Content Gap Analysis:** Compares your content to top-ranking competitors and provides a prioritized list of missing topics and subtopics.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Real-Time Adaptation -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Real-Time Performance Monitoring</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Continuous Monitoring:** Connects to Google Analytics and Search Console APIs to track organic traffic, keyword rankings, and user behavior in real-time.</li>
+                                <li>**Dynamic Re-analysis:** Automatically triggers a new strategy-generation cycle if a keyword's ranking drops or a competitor outranks you.</li>
+                                <li>**Proactive Recommendations:** Anticipates changes in search trends and algorithm updates to provide proactive recommendations.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- User Engagement -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">User Engagement Signals</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Click-Through Rate (CTR):** Recommends more compelling meta titles and descriptions to capture more clicks.</li>
+                                <li>**Time on Page:** Provides content formatting suggestions to keep users engaged and reduce bounce rate.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Marketing & Customer Acquisition -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Marketing & Customer Acquisition</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Content Marketing:** Publish articles and case studies on how Organic Hero helps businesses succeed.</li>
+                                <li>**Social Media:** Engage with target audience on platforms like LinkedIn and Twitter.</li>
+                                <li>**Partnerships:** Collaborate with digital marketing agencies and consultants.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Customer Support & Success -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Customer Support & Success</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Help Center:** A comprehensive, searchable knowledge base for common issues.</li>
+                                <li>**Live Chat:** Real-time support for immediate queries.</li>
+                                <li>**Dedicated Onboarding:** Personalized guidance to ensure clients get the most out of the platform.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Data Security & Privacy -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Data Security & Privacy</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Encryption:** All data is encrypted both in transit and at rest.</li>
+                                <li>**Authentication:** Secure, role-based access control to ensure data is only visible to authorized users.</li>
+                                <li>**Compliance:** Adherence to GDPR and other relevant privacy regulations.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- Team -->
+                    <div class="bg-white rounded-xl shadow-md border border-gray-100 p-6 mb-4 cursor-pointer">
+                        <div class="flex justify-between items-center accordion-header">
+                            <h3 class="text-xl font-semibold text-gray-800">Team Structure</h3>
+                            <span class="transform transition-transform duration-300">▼</span>
+                        </div>
+                        <div class="accordion-content mt-4">
+                            <ul class="list-disc list-inside space-y-2 text-gray-600">
+                                <li>**Product Management:** Oversees the roadmap and feature prioritization.</li>
+                                <li>**Development Team:** Comprised of front-end, back-end, and AI/ML engineers.</li>
+                                <li>**Marketing Team:** Focuses on brand awareness and customer acquisition.</li>
+                                <li>**Customer Success:** Supports users and ensures they achieve their goals.</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- Product Section -->
+        <section id="product" class="py-20 bg-gray-50">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-800">The Product: A Dashboard for Growth</h2>
+                    <p class="mt-4 text-gray-600 max-w-2xl mx-auto">Our intuitive dashboard translates complex data into simple, actionable insights, providing a real-time view of your SEO health.</p>
+                </div>
+                <div class="bg-white rounded-xl shadow-md p-8 md:p-12">
+                    <div class="grid md:grid-cols-2 gap-12 items-center">
+                        <div>
+                            <h3 class="text-2xl font-semibold text-gray-800">Real-Time Analytics Dashboard</h3>
+                            <p class="mt-4 text-gray-600">The central dashboard provides a high-level overview of your website's SEO health. View and analyze all critical data and metrics, from keyword rankings to organic traffic, as they are updated in real-time. This interactive view empowers you to make informed decisions instantly.</p>
+                            <p class="mt-2 text-gray-600">Our **Interactive Content Editor** allows you to review and approve the agent's content suggestions, bridging the gap between insight and action.</p>
+                        </div>
+                        <div class="flex flex-col items-center">
+                            <div class="text-center mb-6">
+                                <p class="text-sm font-semibold text-gray-500 uppercase">Sample Breakdown</p>
+                                <h4 class="text-lg font-bold text-gray-800">Website Traffic Sources</h4>
+                            </div>
+                            <div class="chart-container">
+                                <canvas id="traffic-sources-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Business Plan & Monetization Section -->
+        <section id="business" class="py-20">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Business Plan & Monetization</h2>
+                    <p class="mt-4 text-gray-600 max-w-2xl mx-auto">Organic Hero's value is delivered through a clear, tiered subscription model designed to grow with your business.</p>
+                </div>
+                <div class="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+                    <!-- Starter Plan -->
+                    <div class="bg-white rounded-xl shadow-lg border border-gray-100 p-8 text-center flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Starter</h3>
+                            <p class="mt-2 text-gray-500">For small businesses</p>
+                            <p class="mt-4 text-4xl font-bold text-gray-800">$29<span class="text-xl font-normal text-gray-500">/month</span></p>
+                            <ul class="mt-6 space-y-3 text-left">
+                                <li class="flex items-center"><span class="text-green-500 mr-2">✔</span>Monthly audit</li>
+                                <li class="flex items-center"><span class="text-green-500 mr-2">✔</span>Keyword tracking (5 pages)</li>
+                                <li class="flex items-center"><span class="text-green-500 mr-2">✔</span>Basic dashboard access</li>
+                            </ul>
+                        </div>
+                        <button class="mt-8 bg-gray-200 text-gray-800 font-semibold py-3 px-8 rounded-lg">Get Started</button>
+                    </div>
+                    <!-- Pro Plan -->
+                    <div class="bg-blue-500 rounded-xl shadow-lg p-8 text-center flex flex-col justify-between transform scale-105 border border-blue-600">
+                        <div>
+                            <h3 class="text-2xl font-bold text-white">Pro</h3>
+                            <p class="mt-2 text-blue-100">For growing businesses</p>
+                            <p class="mt-4 text-4xl font-bold text-white">$99<span class="text-xl font-normal text-blue-100">/month</span></p>
+                            <ul class="mt-6 space-y-3 text-left text-white">
+                                <li class="flex items-center"><span class="text-white mr-2">✔</span>Weekly audits</li>
+                                <li class="flex items-center"><span class="text-white mr-2">✔</span>Unlimited keyword tracking</li>
+                                <li class="flex items-center"><span class="text-white mr-2">✔</span>Content suggestions & backlink strategy</li>
+                                <li class="flex items-center"><span class="text-white mr-2">✔</span>Full dashboard access</li>
+                            </ul>
+                        </div>
+                        <button class="mt-8 bg-white text-blue-500 font-semibold py-3 px-8 rounded-lg shadow-lg hover:bg-gray-100 transition-colors">Choose Pro</button>
+                    </div>
+                    <!-- Enterprise Plan -->
+                    <div class="bg-white rounded-xl shadow-lg border border-gray-100 p-8 text-center flex flex-col justify-between">
+                        <div>
+                            <h3 class="text-2xl font-bold text-gray-800">Enterprise</h3>
+                            <p class="mt-2 text-gray-500">For agencies & large websites</p>
+                            <p class="mt-4 text-4xl font-bold text-gray-800">Custom</p>
+                            <ul class="mt-6 space-y-3 text-left">
+                                <li class="flex items-center"><span class="text-green-500 mr-2">✔</span>Real-time monitoring</li>
+                                <li class="flex items-center"><span class="text-green-500 mr-2">✔</span>Dedicated account management</li>
+                                <li class="flex items-center"><span class="text-green-500 mr-2">✔</span>API access</li>
+                            </ul>
+                        </div>
+                        <button class="mt-8 bg-gray-200 text-gray-800 font-semibold py-3 px-8 rounded-lg">Contact Us</button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Roadmap Section -->
+        <section id="roadmap" class="py-20 bg-gray-50">
+            <div class="container mx-auto px-6">
+                <div class="text-center mb-12">
+                    <h2 class="text-3xl md:text-4xl font-bold text-gray-800">Product Roadmap</h2>
+                    <p class="mt-4 text-gray-600 max-w-2xl mx-auto">Our plan for growth, from initial launch to a full-service marketing platform.</p>
+                </div>
+                <div class="relative max-w-3xl mx-auto">
+                    <div class="absolute left-1/2 -ml-0.5 w-1 bg-gray-300 h-full hidden md:block"></div>
+                    
+                    <!-- Phase 1 -->
+                    <div class="flex flex-col md:flex-row items-center md:items-stretch mb-8 md:mb-12">
+                        <div class="md:w-1/2 text-right md:pr-12 md:pb-8 flex-shrink-0">
+                            <h3 class="text-2xl font-bold text-gray-800">Phase 1: Launch (MVP)</h3>
+                            <p class="mt-2 text-gray-600">Launch the core multi-agent system, dashboard, and initial CMS plugins for WordPress and Shopify. Focus on acquiring initial customers and gathering feedback to refine the product.</p>
+                        </div>
+                        <div class="md:w-1/2 relative md:pl-12 flex-shrink-0">
+                            <div class="absolute w-4 h-4 rounded-full bg-blue-500 -left-2 top-4 hidden md:block"></div>
+                        </div>
+                    </div>
+
+                    <!-- Phase 2 -->
+                    <div class="flex flex-col md:flex-row-reverse items-center md:items-stretch mb-8 md:mb-12">
+                        <div class="md:w-1/2 text-left md:pl-12 md:pb-8 flex-shrink-0">
+                            <h3 class="text-2xl font-bold text-gray-800">Phase 2: Growth</h3>
+                            <p class="mt-2 text-gray-600">Integrate with more platforms and services. Add a social media scheduler for automated content promotion and a paid search integration for a holistic marketing view.</p>
+                        </div>
+                        <div class="md:w-1/2 relative md:pr-12 flex-shrink-0">
+                            <div class="absolute w-4 h-4 rounded-full bg-blue-500 -right-2 top-4 hidden md:block"></div>
+                        </div>
+                    </div>
+
+                    <!-- Phase 3 -->
+                    <div class="flex flex-col md:flex-row items-center md:items-stretch">
+                        <div class="md:w-1/2 text-right md:pr-12 flex-shrink-0">
+                            <h3 class="text-2xl font-bold text-gray-800">Phase 3: Expansion</h3>
+                            <p class="mt-2 text-gray-600">Introduce advanced features like AI-driven content generation, where the agent can draft full articles. Explore expanding to cover other search engines, such as Bing and DuckDuckGo.</p>
+                        </div>
+                        <div class="md:w-1/2 relative md:pl-12 flex-shrink-0">
+                            <div class="absolute w-4 h-4 rounded-full bg-blue-500 -left-2 top-4 hidden md:block"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 text-white py-12">
+        <div class="container mx-auto px-6 text-center">
+            <p>&copy; 2024 Organic Hero. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+        const navLinks = document.querySelectorAll('.nav-link');
+        const sections = document.querySelectorAll('section');
+        const mobileMenuButton = document.getElementById('mobile-menu-button');
+        const mobileMenu = document.getElementById('mobile-menu');
+
+        mobileMenuButton.addEventListener('click', () => {
+            mobileMenu.classList.toggle('hidden');
+        });
+
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                const navLink = document.querySelector(`a[href="#${entry.target.id}"]`);
+                if (entry.isIntersecting) {
+                    navLink.classList.add('active');
+                } else {
+                    navLink.classList.remove('active');
+                }
+            });
+        }, { rootMargin: '0px 0px -50% 0px' });
+
+        sections.forEach(section => {
+            observer.observe(section);
+        });
+
+        const accordionHeaders = document.querySelectorAll('.accordion-header');
+        accordionHeaders.forEach(header => {
+            header.addEventListener('click', () => {
+                const content = header.nextElementSibling;
+                const arrow = header.querySelector('span');
+
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                    arrow.style.transform = 'rotate(0deg)';
+                } else {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                    arrow.style.transform = 'rotate(180deg)';
+                }
+            });
+        });
+
+        const ctx = document.getElementById('traffic-sources-chart').getContext('2d');
+        const trafficData = {
+            labels: ['Organic Search', 'Direct', 'Referral', 'Social'],
+            datasets: [{
+                data: [45, 25, 20, 10],
+                backgroundColor: ['#4A90E2', '#A0C4FF', '#FFD6A5', '#8ECAE6'],
+                hoverOffset: 4
+            }]
+        };
+
+        const chartConfig = {
+            type: 'doughnut',
+            data: trafficData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                const label = context.label || '';
+                                const value = context.parsed || 0;
+                                const total = context.dataset.data.reduce((sum, current) => sum + current, 0);
+                                const percentage = ((value / total) * 100).toFixed(1);
+                                return `${label}: ${percentage}%`;
+                            }
+                        }
+                    }
+                }
+            }
+        };
+
+        const trafficChart = new Chart(ctx, chartConfig);
+    </script>
+</body>
+</html>
