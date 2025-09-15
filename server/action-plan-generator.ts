@@ -83,7 +83,9 @@ export class ActionPlanGenerator {
       Recommendations:
       ${recommendations.map((rec, i) => `${i + 1}. ${rec}`).join('\n')}
       
-      Create 8-12 prioritized action items. For each action item, provide:
+      Create 8-12 prioritized action items with EXTREMELY DETAILED step-by-step implementation directions. Each step must be actionable with specific instructions like "go to Google Search Console, click on...", "add this code to your website", "go to Google Maps and do...", etc.
+      
+      For each action item, provide:
       - Title (clear, specific action)
       - Description (detailed explanation)
       - Priority (critical/high/medium/low)
@@ -91,25 +93,59 @@ export class ActionPlanGenerator {
       - Effort (high/medium/low)
       - Category (technical/content/keywords/competitors/user_experience/local_seo)
       - Timeframe (immediate/this_week/this_month/next_quarter)
-      - Steps (3-5 specific steps to implement)
-      - Tools (optional tools that can help)
+      - Steps (8-15 VERY DETAILED step-by-step implementation instructions with specific actions like "Go to Google Search Console → Performance → Click on...", "Add this HTML code: <meta name=... ", "Create a new page at yoursite.com/...", "Go to Google My Business and update...", etc.)
+      - Tools (specific tools needed)
       - Expected improvement (what improvement to expect)
       - Dependencies (if any action items depend on others)
       
-      Format as JSON array with this structure:
+      CRITICAL: Make steps extremely specific and actionable. Include:
+      - Exact URLs to visit (google.com/search, search.google.com/search-console, etc.)
+      - Specific buttons/links to click
+      - Exact code snippets to add
+      - Precise file locations to modify
+      - Step-by-step navigation instructions
+      - Specific form fields to fill out
+      - Exact configuration settings to change
+      
+      Example of detailed steps:
+      [
+        "Step 1: Go to https://search.google.com/search-console and verify domain ownership",
+        "Step 2: Click on 'Performance' in left sidebar → Click 'Pages' tab",
+        "Step 3: Identify pages with high impressions but low click-through rates",
+        "Step 4: For each underperforming page, click 'View page' → 'Source' to edit HTML",
+        "Step 5: Add this meta description code: <meta name='description' content='Your optimized description here'>",
+        "Step 6: Update title tag to: <title>Primary Keyword | Business Name - Location</title>",
+        "Step 7: Go to Google PageSpeed Insights (pagespeed.web.dev) and test the updated page",
+        "Step 8: Fix any Core Web Vitals issues by compressing images using TinyPNG.com"
+      ]
+      
+      Format as JSON array:
       [
         {
           "id": "action_1",
-          "title": "Improve Mobile Page Speed",
-          "description": "Optimize mobile performance to improve user experience and search rankings",
-          "priority": "high",
-          "impact": "high",
+          "title": "Optimize Google My Business for Local SEO Dominance",
+          "description": "Complete and optimize Google My Business listing to rank #1 in local search results and Google Maps",
+          "priority": "critical",
+          "impact": "high", 
           "effort": "medium",
-          "category": "technical",
+          "category": "local_seo",
           "timeframe": "this_week",
-          "steps": ["Compress images", "Minify CSS/JS", "Enable compression", "Optimize server response"],
-          "tools": ["Google PageSpeed Insights", "GTmetrix", "WebP converters"],
-          "expectedImprovement": "10-15 point improvement in mobile speed score",
+          "steps": [
+            "Step 1: Go to business.google.com and sign in with business Google account",
+            "Step 2: Search for your business name '${this.domain}' - if not found, click 'Add your business'",
+            "Step 3: Fill in exact business address, phone number, and website URL",
+            "Step 4: Choose the most specific business category (e.g., 'Nepalese Restaurant' not just 'Restaurant')",
+            "Step 5: Upload high-quality photos: storefront, interior, menu items, team (minimum 10 photos)",
+            "Step 6: Add business description with local keywords: 'Best ${this.businessIntel?.businessType} in ${this.businessIntel?.location}'",
+            "Step 7: Set accurate business hours including holiday hours",
+            "Step 8: Add all services offered as separate service listings",
+            "Step 9: Create Google Posts weekly with local events, menu updates, special offers",
+            "Step 10: Respond to ALL customer reviews within 24 hours",
+            "Step 11: Add FAQ section with common customer questions",
+            "Step 12: Enable messaging to allow direct customer contact"
+          ],
+          "tools": ["Google My Business", "Google Posts", "Canva for images"],
+          "expectedImprovement": "Appear in Google Maps top 3 results, 40-60% increase in local visibility",
           "dependencies": []
         }
       ]
@@ -182,57 +218,133 @@ export class ActionPlanGenerator {
     const fallbackItems: ActionItem[] = [
       {
         id: 'action_1',
-        title: 'Improve Page Speed Performance',
-        description: 'Optimize website loading speed for better user experience and search rankings',
+        title: 'Optimize Google My Business for Local SEO Dominance',
+        description: 'Complete and optimize Google My Business listing to rank #1 in local search results and Google Maps',
+        priority: 'critical',
+        impact: 'high',
+        effort: 'medium',
+        category: 'local_seo',
+        timeframe: 'this_week',
+        steps: [
+          'Step 1: Go to business.google.com and sign in with your business Google account',
+          'Step 2: Search for your business name - if not found, click "Add your business to Google"',
+          'Step 3: Fill in exact business address, phone number, and website URL (must match website)',
+          'Step 4: Choose the most specific business category (e.g., "Nepalese Restaurant" not just "Restaurant")',
+          'Step 5: Upload high-quality photos: storefront, interior, menu items, team (minimum 10 photos)',
+          'Step 6: Add business description with local keywords: "Best [business type] in [location]"',
+          'Step 7: Set accurate business hours including holiday hours and special event times',
+          'Step 8: Add all services offered as separate service listings in the Services section',
+          'Step 9: Create Google Posts weekly with local events, menu updates, special offers',
+          'Step 10: Respond to ALL customer reviews within 24 hours with personalized messages',
+          'Step 11: Add FAQ section with common customer questions about location, hours, services',
+          'Step 12: Enable messaging to allow direct customer contact through Google'
+        ],
+        tools: ['Google My Business', 'Google Posts', 'Canva for images', 'Business phone'],
+        expectedImprovement: 'Appear in Google Maps top 3 results, 40-60% increase in local visibility',
+      },
+      {
+        id: 'action_2',
+        title: 'Implement Page Speed Optimization for Core Web Vitals',
+        description: 'Optimize website loading speed to meet Google Core Web Vitals requirements and improve search rankings',
         priority: 'high',
         impact: 'high',
         effort: 'medium',
         category: 'technical',
         timeframe: 'this_week',
         steps: [
-          'Run Google PageSpeed Insights analysis',
-          'Compress and optimize images',
-          'Minify CSS and JavaScript files',
-          'Enable gzip compression'
+          'Step 1: Go to pagespeed.web.dev and test your website homepage',
+          'Step 2: Go to search.google.com/search-console → Core Web Vitals section',
+          'Step 3: Identify pages marked as "Poor" or "Needs Improvement"',
+          'Step 4: Download all images from your website and go to tinypng.com',
+          'Step 5: Compress each image (aim for under 100KB per image)',
+          'Step 6: Replace original images with compressed versions on your website',
+          'Step 7: Go to your website hosting control panel → Enable Gzip compression',
+          'Step 8: If using WordPress: Install WP Rocket plugin → Enable all speed optimizations',
+          'Step 9: If using custom code: Minify CSS/JS files using tools like minifier.org',
+          'Step 10: Test again on PageSpeed Insights - aim for 90+ mobile score',
+          'Step 11: Go to GTmetrix.com and run speed test → Fix any remaining issues',
+          'Step 12: Submit improved pages to Google Search Console for re-indexing'
         ],
-        tools: ['Google PageSpeed Insights', 'GTmetrix', 'TinyPNG'],
-        expectedImprovement: '10-20 point improvement in speed scores',
+        tools: ['Google PageSpeed Insights', 'GTmetrix', 'TinyPNG', 'WP Rocket', 'Google Search Console'],
+        expectedImprovement: '15-25 point improvement in PageSpeed scores, better mobile rankings',
       },
       {
-        id: 'action_2',
-        title: 'Optimize Content for Target Keywords',
-        description: 'Improve content relevance and keyword targeting for better rankings',
+        id: 'action_3',
+        title: 'Create SEO-Optimized Content for Target Keywords',
+        description: 'Develop high-quality content targeting primary keywords to rank #1 in search results',
         priority: 'high',
         impact: 'high',
         effort: 'medium',
         category: 'content',
         timeframe: 'this_month',
         steps: [
-          'Conduct keyword research for your industry',
-          'Update page titles and meta descriptions',
-          'Optimize existing content with target keywords',
-          'Create new content for high-value keywords'
+          'Step 1: Go to search.google.com and search for your main business keywords',
+          'Step 2: Analyze top 3 competitors - note their content length, headings, topics covered',
+          'Step 3: Go to answerthepublic.com and enter your main keyword for content ideas',
+          'Step 4: Create a new page/blog post with URL: yoursite.com/[primary-keyword]',
+          'Step 5: Write title tag: "[Primary Keyword] | [Business Name] - [Location]"',
+          'Step 6: Add meta description (150-160 chars): Include keyword and call-to-action',
+          'Step 7: Structure content with H1 (primary keyword), H2s (related keywords)',
+          'Step 8: Write 1500+ words covering: what, why, how, benefits, local relevance',
+          'Step 9: Add internal links to 3-5 other relevant pages on your website',
+          'Step 10: Include 2-3 high-quality images with alt text containing keywords',
+          'Step 11: Add FAQ section answering common customer questions',
+          'Step 12: Go to Google Search Console → URL Inspection → Request indexing for new page'
         ],
-        tools: ['Google Keyword Planner', 'SEMrush', 'Ahrefs'],
-        expectedImprovement: 'Improved keyword rankings and organic traffic',
+        tools: ['Google Search', 'AnswerThePublic', 'Google Search Console', 'Yoast SEO', 'Google Keyword Planner'],
+        expectedImprovement: 'Rank in top 10 for target keywords, 30-50% increase in organic traffic',
       },
       {
-        id: 'action_3',
-        title: 'Fix Technical SEO Issues',
-        description: 'Address technical issues that may be hindering search performance',
-        priority: 'medium',
+        id: 'action_4',
+        title: 'Fix Critical Technical SEO Issues',
+        description: 'Address technical issues that prevent Google from properly crawling and ranking your website',
+        priority: 'high',
         impact: 'medium',
         effort: 'low',
         category: 'technical',
         timeframe: 'this_week',
         steps: [
-          'Check for broken links and fix them',
-          'Ensure proper URL structure',
-          'Add missing alt tags to images',
-          'Improve internal linking structure'
+          'Step 1: Go to search.google.com/search-console → Coverage section',
+          'Step 2: Fix all "Error" pages listed (404s, server errors, redirect loops)',
+          'Step 3: Go to search.google.com/search-console → Sitemaps → Submit XML sitemap',
+          'Step 4: Check your website code: Add <title> tags to ALL pages',
+          'Step 5: Add meta descriptions to ALL pages (unique, 150-160 characters each)',
+          'Step 6: Go through your website and add alt text to ALL images',
+          'Step 7: Fix any broken internal links (use tools like brokenlinkcheck.com)',
+          'Step 8: Ensure your website has SSL certificate (URL starts with https://)',
+          'Step 9: Create robots.txt file and upload to yoursite.com/robots.txt',
+          'Step 10: Add structured data markup for business information (use schema.org)',
+          'Step 11: Go to search.google.com/search-console → Mobile Usability → Fix issues',
+          'Step 12: Test website on mobile phone - ensure all buttons/links work'
         ],
-        tools: ['Google Search Console', 'Screaming Frog', 'Ahrefs'],
-        expectedImprovement: 'Better crawlability and indexing',
+        tools: ['Google Search Console', 'Broken Link Checker', 'SSL Certificate Check', 'Schema Markup Generator'],
+        expectedImprovement: 'Better crawlability, indexing, and mobile rankings',
+      },
+      {
+        id: 'action_5',
+        title: 'Build Local Citations and Business Listings',
+        description: 'Create consistent business listings across the web to improve local search authority',
+        priority: 'medium',
+        impact: 'high',
+        effort: 'medium',
+        category: 'local_seo',
+        timeframe: 'this_month',
+        steps: [
+          'Step 1: Create accounts on Yelp.com, Facebook Business, TripAdvisor',
+          'Step 2: Ensure NAP (Name, Address, Phone) is EXACTLY the same across all platforms',
+          'Step 3: Go to moz.com/local/search and find other relevant local directories',
+          'Step 4: Submit business to Yellow Pages, Foursquare, and industry-specific directories',
+          'Step 5: Create profiles on review sites specific to your industry',
+          'Step 6: Add your website URL, business hours, and description to each listing',
+          'Step 7: Upload the same business photos across all platforms',
+          'Step 8: Set up Google Alerts for your business name to monitor mentions',
+          'Step 9: Encourage satisfied customers to leave reviews on these platforms',
+          'Step 10: Respond to all reviews (positive and negative) professionally',
+          'Step 11: Join local business associations and get listed on their websites',
+          'Step 12: Reach out to local news websites and offer to write expert articles'
+        ],
+        tools: ['Yelp', 'Facebook Business', 'TripAdvisor', 'Yellow Pages', 'Google Alerts', 'Moz Local'],
+        expectedImprovement: 'Higher local search rankings, increased online authority, more customer trust',
       }
     ];
 
