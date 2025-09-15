@@ -57,6 +57,72 @@ export const seoAnalysisSchema = z.object({
     totalCompetitors: z.number(),
     marketShare: z.number(),
   }),
+  // Google SERP Presence Analysis
+  serpPresence: z.object({
+    organicResults: z.array(z.object({
+      position: z.number().nullable(),
+      url: z.string(),
+      title: z.string(),
+      snippet: z.string(),
+    })),
+    paidAds: z.array(z.object({
+      position: z.number(),
+      url: z.string(),
+      title: z.string(),
+      description: z.string(),
+    })),
+    imagesResults: z.object({
+      found: z.boolean(),
+      count: z.number(),
+      examples: z.array(z.string()),
+    }),
+    mapsResults: z.object({
+      found: z.boolean(),
+      position: z.number().nullable(),
+      businessName: z.string(),
+      address: z.string(),
+      rating: z.number().nullable(),
+    }),
+    peopleAlsoAsk: z.object({
+      questions: z.array(z.string()),
+      relatedToWebsite: z.boolean(),
+    }),
+    featuredSnippets: z.object({
+      found: z.boolean(),
+      type: z.string(),
+      content: z.string(),
+    }),
+    knowledgePanel: z.object({
+      found: z.boolean(),
+      type: z.string(),
+      content: z.string(),
+    }),
+    newsResults: z.object({
+      found: z.boolean(),
+      articles: z.array(z.object({
+        title: z.string(),
+        source: z.string(),
+        date: z.string(),
+      })),
+    }),
+    videoResults: z.object({
+      found: z.boolean(),
+      videos: z.array(z.object({
+        title: z.string(),
+        platform: z.string(),
+        url: z.string(),
+      })),
+    }),
+  }),
+  // Business Intelligence from website analysis
+  businessIntelligence: z.object({
+    businessType: z.string(),
+    industry: z.string(),
+    location: z.string(),
+    products: z.array(z.string()),
+    services: z.array(z.string()),
+    description: z.string(),
+  }).optional(),
   // New fields for real API integration support
   isDemoMode: z.boolean().optional(),
   demoMessage: z.string().optional(),

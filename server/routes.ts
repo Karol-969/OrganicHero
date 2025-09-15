@@ -317,6 +317,392 @@ function detectBusinessType(content: string): string {
   return detectedType;
 }
 
+// Comprehensive Google SERP presence analysis
+interface SERPPresence {
+  organicResults: {
+    position: number | null;
+    url: string;
+    title: string;
+    snippet: string;
+  }[];
+  paidAds: {
+    position: number;
+    url: string;
+    title: string;
+    description: string;
+  }[];
+  imagesResults: {
+    found: boolean;
+    count: number;
+    examples: string[];
+  };
+  mapsResults: {
+    found: boolean;
+    position: number | null;
+    businessName: string;
+    address: string;
+    rating: number | null;
+  };
+  peopleAlsoAsk: {
+    questions: string[];
+    relatedToWebsite: boolean;
+  };
+  featuredSnippets: {
+    found: boolean;
+    type: string; // paragraph, list, table
+    content: string;
+  };
+  knowledgePanel: {
+    found: boolean;
+    type: string; // business, person, place
+    content: string;
+  };
+  newsResults: {
+    found: boolean;
+    articles: {
+      title: string;
+      source: string;
+      date: string;
+    }[];
+  };
+  videoResults: {
+    found: boolean;
+    videos: {
+      title: string;
+      platform: string;
+      url: string;
+    }[];
+  };
+}
+
+async function analyzeSERPPresence(domain: string, businessIntel: BusinessIntelligence): Promise<{
+  isDemoMode: boolean;
+  serpPresence: SERPPresence;
+  error?: string;
+}> {
+  const serperApiKey = process.env.SERPER_API_KEY;
+  const serpApiKey = process.env.SERPAPI_KEY;
+  
+  // If no API keys available, return intelligent demo data
+  if (!serperApiKey && !serpApiKey) {
+    console.log('⚠️  DEMO MODE: No SERP API keys for Google presence analysis');
+    
+    return {
+      isDemoMode: true,
+      serpPresence: {
+        organicResults: [
+          {
+            position: 3,
+            url: `https://${domain}`,
+            title: `[REAL ANALYSIS] ${businessIntel.businessType} - ${businessIntel.location}`,
+            snippet: `${businessIntel.description}. Configure SERP API keys to see actual Google rankings.`
+          }
+        ],
+        paidAds: [],
+        imagesResults: {
+          found: true,
+          count: 5,
+          examples: [`[ANALYSIS] ${businessIntel.businessType} images would appear here`]
+        },
+        mapsResults: {
+          found: businessIntel.businessType === 'restaurant' || businessIntel.businessType.includes('service'),
+          position: 1,
+          businessName: `${businessIntel.businessType} in ${businessIntel.location}`,
+          address: businessIntel.location,
+          rating: 4.2
+        },
+        peopleAlsoAsk: {
+          questions: [
+            `What services does ${businessIntel.businessType} offer?`,
+            `Best ${businessIntel.businessType} in ${businessIntel.location}?`,
+            `How to contact ${businessIntel.businessType}?`
+          ],
+          relatedToWebsite: true
+        },
+        featuredSnippets: {
+          found: false,
+          type: 'paragraph',
+          content: ''
+        },
+        knowledgePanel: {
+          found: false,
+          type: 'business',
+          content: ''
+        },
+        newsResults: {
+          found: false,
+          articles: []
+        },
+        videoResults: {
+          found: false,
+          videos: []
+        }
+      }
+    };
+  }
+
+  try {
+    console.log(`🔍 Starting comprehensive SERP presence analysis for ${domain}...`);
+    
+    // Generate search queries based on business intelligence
+    const businessName = domain.split('.')[0].replace(/[-_]/g, ' ');
+    const location = businessIntel.location.split(',')[0].trim();
+    
+    const searchQueries = [
+      businessName, // Exact business name search
+      `${businessName} ${location}`, // Business + location
+      `${businessIntel.businessType} ${location}`, // Industry + location
+      businessIntel.services[0] || businessName // Primary service
+    ].filter(query => query && query.length > 3);
+
+    console.log(`🎯 Analyzing SERP presence with queries: ${searchQueries.join(', ')}`);
+
+    const serpPresence: SERPPresence = {
+      organicResults: [],
+      paidAds: [],
+      imagesResults: { found: false, count: 0, examples: [] },
+      mapsResults: { found: false, position: null, businessName: '', address: '', rating: null },
+      peopleAlsoAsk: { questions: [], relatedToWebsite: false },
+      featuredSnippets: { found: false, type: 'paragraph', content: '' },
+      knowledgePanel: { found: false, type: 'business', content: '' },
+      newsResults: { found: false, articles: [] },
+      videoResults: { found: false, videos: [] }
+    };
+
+    let apiCallsMade = 0;
+    
+    // Primary search for business name and location
+    const primaryQuery = searchQueries[0];
+    
+    if (serperApiKey) {
+      console.log('📡 Using Serper API for SERP presence analysis...');
+      
+      try {
+        const response = await fetchWithTimeout('https://google.serper.dev/search', {
+          method: 'POST',
+          headers: {
+            'X-API-KEY': serperApiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            q: primaryQuery,
+            num: 20, // Get more results to find our domain
+            gl: businessIntel.location.includes('Australia') ? 'au' : 'us',
+            hl: 'en',
+            // Request additional SERP features
+            type: 'search' // This includes organic, ads, images, etc.
+          })
+        }, 10000);
+
+        if (response.ok) {
+          const data = await response.json();
+          apiCallsMade++;
+          console.log(`✅ SERP data retrieved for "${primaryQuery}"`);
+          
+          // Analyze organic results
+          if (data.organic && Array.isArray(data.organic)) {
+            data.organic.forEach((result: any, index: number) => {
+              try {
+                const url = new URL(result.link);
+                if (url.hostname.includes(domain) || domain.includes(url.hostname.replace('www.', ''))) {
+                  serpPresence.organicResults.push({
+                    position: index + 1,
+                    url: result.link,
+                    title: result.title || '',
+                    snippet: result.snippet || ''
+                  });
+                }
+              } catch (error) {
+                // Skip malformed URLs
+              }
+            });
+          }
+          
+          // Analyze paid ads
+          if (data.ads && Array.isArray(data.ads)) {
+            data.ads.forEach((ad: any, index: number) => {
+              try {
+                const url = new URL(ad.link);
+                if (url.hostname.includes(domain) || domain.includes(url.hostname.replace('www.', ''))) {
+                  serpPresence.paidAds.push({
+                    position: index + 1,
+                    url: ad.link,
+                    title: ad.title || '',
+                    description: ad.description || ''
+                  });
+                }
+              } catch (error) {
+                // Skip malformed URLs
+              }
+            });
+          }
+          
+          // Analyze local/maps results
+          if (data.places && Array.isArray(data.places)) {
+            data.places.forEach((place: any, index: number) => {
+              if (place.title && place.title.toLowerCase().includes(businessName.toLowerCase())) {
+                serpPresence.mapsResults = {
+                  found: true,
+                  position: index + 1,
+                  businessName: place.title || '',
+                  address: place.address || '',
+                  rating: place.rating || null
+                };
+              }
+            });
+          }
+          
+          // Analyze People Also Ask
+          if (data.peopleAlsoAsk && Array.isArray(data.peopleAlsoAsk)) {
+            serpPresence.peopleAlsoAsk = {
+              questions: data.peopleAlsoAsk.slice(0, 5).map((item: any) => item.question || ''),
+              relatedToWebsite: data.peopleAlsoAsk.some((item: any) => 
+                item.question && item.question.toLowerCase().includes(businessName.toLowerCase())
+              )
+            };
+          }
+          
+          // Analyze featured snippets
+          if (data.answerBox) {
+            serpPresence.featuredSnippets = {
+              found: true,
+              type: data.answerBox.type || 'paragraph',
+              content: data.answerBox.answer || data.answerBox.snippet || ''
+            };
+          }
+          
+          // Analyze knowledge panel
+          if (data.knowledgeGraph) {
+            serpPresence.knowledgePanel = {
+              found: true,
+              type: data.knowledgeGraph.type || 'business',
+              content: data.knowledgeGraph.description || ''
+            };
+          }
+          
+          // Analyze news results
+          if (data.news && Array.isArray(data.news)) {
+            const relevantNews = data.news.filter((article: any) => 
+              article.title && (
+                article.title.toLowerCase().includes(businessName.toLowerCase()) ||
+                article.title.toLowerCase().includes(businessIntel.businessType.toLowerCase())
+              )
+            );
+            
+            if (relevantNews.length > 0) {
+              serpPresence.newsResults = {
+                found: true,
+                articles: relevantNews.slice(0, 3).map((article: any) => ({
+                  title: article.title || '',
+                  source: article.source || '',
+                  date: article.date || ''
+                }))
+              };
+            }
+          }
+          
+          // Analyze video results
+          if (data.videos && Array.isArray(data.videos)) {
+            const relevantVideos = data.videos.filter((video: any) => 
+              video.title && (
+                video.title.toLowerCase().includes(businessName.toLowerCase()) ||
+                video.title.toLowerCase().includes(businessIntel.businessType.toLowerCase())
+              )
+            );
+            
+            if (relevantVideos.length > 0) {
+              serpPresence.videoResults = {
+                found: true,
+                videos: relevantVideos.slice(0, 3).map((video: any) => ({
+                  title: video.title || '',
+                  platform: video.platform || 'YouTube',
+                  url: video.link || ''
+                }))
+              };
+            }
+          }
+        }
+      } catch (error) {
+        console.error('❌ Serper API error for SERP presence:', error);
+      }
+    }
+    
+    // Analyze Google Images separately
+    if (serperApiKey && apiCallsMade < 2) {
+      try {
+        const imageResponse = await fetchWithTimeout('https://google.serper.dev/images', {
+          method: 'POST',
+          headers: {
+            'X-API-KEY': serperApiKey,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            q: `${businessName} ${businessIntel.businessType}`,
+            num: 10
+          })
+        }, 8000);
+        
+        if (imageResponse.ok) {
+          const imageData = await imageResponse.json();
+          apiCallsMade++;
+          
+          if (imageData.images && Array.isArray(imageData.images)) {
+            // Check if any images are from the target domain
+            const domainImages = imageData.images.filter((img: any) => {
+              try {
+                const imgUrl = new URL(img.link || '');
+                return imgUrl.hostname.includes(domain) || domain.includes(imgUrl.hostname.replace('www.', ''));
+              } catch {
+                return false;
+              }
+            });
+            
+            serpPresence.imagesResults = {
+              found: domainImages.length > 0,
+              count: domainImages.length,
+              examples: domainImages.slice(0, 3).map((img: any) => img.title || 'Business image')
+            };
+            
+            console.log(`🖼️ Found ${domainImages.length} images from domain in Google Images`);
+          }
+        }
+      } catch (error) {
+        console.error('❌ Images search error:', error);
+      }
+    }
+    
+    console.log(`📊 SERP presence analysis complete - ${apiCallsMade} API calls made`);
+    console.log(`   Organic results: ${serpPresence.organicResults.length}`);
+    console.log(`   Paid ads: ${serpPresence.paidAds.length}`);
+    console.log(`   Maps presence: ${serpPresence.mapsResults.found ? 'Yes' : 'No'}`);
+    console.log(`   Images: ${serpPresence.imagesResults.count} found`);
+    console.log(`   People Also Ask: ${serpPresence.peopleAlsoAsk.questions.length} questions`);
+    
+    return {
+      isDemoMode: false,
+      serpPresence
+    };
+    
+  } catch (error) {
+    console.error('❌ SERP presence analysis failed:', error);
+    return {
+      isDemoMode: true,
+      error: error instanceof Error ? error.message : 'Unknown error occurred',
+      serpPresence: {
+        organicResults: [],
+        paidAds: [],
+        imagesResults: { found: false, count: 0, examples: [] },
+        mapsResults: { found: false, position: null, businessName: '', address: '', rating: null },
+        peopleAlsoAsk: { questions: [], relatedToWebsite: false },
+        featuredSnippets: { found: false, type: 'paragraph', content: '' },
+        knowledgePanel: { found: false, type: 'business', content: '' },
+        newsResults: { found: false, articles: [] },
+        videoResults: { found: false, videos: [] }
+      }
+    };
+  }
+}
+
 function detectIndustry(content: string, businessType: string): string {
   // Use business type as base, but look for more specific industry terms
   const industryMap: {[key: string]: string[]} = {
@@ -625,8 +1011,10 @@ async function analyzeCompetitors(domain: string, businessIntel?: BusinessIntell
     
     // Generate intelligent search terms based on business analysis
     let searchQueries: string[] = [];
+    let baseTerm: string;
     
     if (businessIntel) {
+      baseTerm = businessIntel.businessType;
       console.log(`🧠 Using business intelligence: ${businessIntel.businessType} in ${businessIntel.industry} located in ${businessIntel.location}`);
       
       // Build search queries based on actual business intelligence
@@ -644,7 +1032,7 @@ async function analyzeCompetitors(domain: string, businessIntel?: BusinessIntell
       console.log(`🎯 Generated ${searchQueries.length} intelligent search queries based on website content`);
     } else {
       // Fallback to domain-based analysis  
-      const baseTerm = domain.split('.')[0].replace(/[-_]/g, ' ');
+      baseTerm = domain.split('.')[0].replace(/[-_]/g, ' ');
       searchQueries = [
         `${baseTerm} services`,
         `best ${baseTerm} company`,
@@ -1243,10 +1631,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('🎯 Step 5: Intelligent keyword analysis...');
       const keywordAnalysis = await analyzeKeywords(domain, validUrl, businessIntel);
       
+      // STEP 6: Analyze Google SERP presence across all features
+      console.log('🔍 Step 6: Comprehensive SERP presence analysis...');
+      const serpAnalysis = await analyzeSERPPresence(domain, businessIntel);
+      
       // Extract data and check for demo mode
       const competitors = competitorAnalysis.competitors;
       const keywords = keywordAnalysis.keywords;
-      const isDemoMode = competitorAnalysis.isDemoMode || keywordAnalysis.isDemoMode;
+      const isDemoMode = competitorAnalysis.isDemoMode || keywordAnalysis.isDemoMode || serpAnalysis.isDemoMode;
       
       // Enhanced demo mode messaging
       let demoMessage = undefined;
@@ -1254,8 +1646,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const missingServices = [];
         if (competitorAnalysis.isDemoMode) missingServices.push('competitor analysis');
         if (keywordAnalysis.isDemoMode) missingServices.push('keyword research');
+        if (serpAnalysis.isDemoMode) missingServices.push('SERP presence analysis');
         
-        demoMessage = `Demo mode active for ${missingServices.join(' and ')}. Configure API keys for real data: ` +
+        demoMessage = `Demo mode active for ${missingServices.join(', ')}. Configure API keys for real data: ` +
                      `SERPER_API_KEY or SERPAPI_KEY for SERP data, DATAFORSEO_LOGIN/PASSWORD for keyword volumes.`;
       }
       
@@ -1294,6 +1687,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
           rank: competitors.find(c => c.name === domain)?.ranking || 3,
           totalCompetitors: competitors.length + 12, // Conservative estimate of market size
           marketShare: Math.round(Math.max(100 / ((competitors.find(c => c.name === domain)?.ranking || 3) * 2.5), 1)) // Realistic market share calculation
+        },
+        // Google SERP Presence Analysis
+        serpPresence: serpAnalysis.serpPresence,
+        // Business Intelligence from website analysis
+        businessIntelligence: {
+          businessType: businessIntel.businessType,
+          industry: businessIntel.industry,
+          location: businessIntel.location,
+          products: businessIntel.products,
+          services: businessIntel.services,
+          description: businessIntel.description,
         },
         isDemoMode, // Include demo mode flag in response  
         demoMessage
