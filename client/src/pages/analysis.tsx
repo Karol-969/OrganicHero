@@ -20,6 +20,24 @@ export default function AnalysisPage() {
   const [analysisUrl, setAnalysisUrl] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'overview' | 'actionplan' | 'agents' | 'dashboard'>('overview');
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
+  const [keywordFilter, setKeywordFilter] = useState<{
+    search: string;
+    difficulty: string;
+    intent: string;
+    location: string;
+  }>({
+    search: '',
+    difficulty: '',
+    intent: '',
+    location: ''
+  });
+  const [keywordSort, setKeywordSort] = useState<{
+    field: string;
+    direction: 'asc' | 'desc';
+  }>({
+    field: 'volume',
+    direction: 'desc'
+  });
 
   // Extract URL from localStorage if available
   useEffect(() => {
@@ -228,8 +246,18 @@ export default function AnalysisPage() {
       keyword.contentStrategy?.callToAction || ''
     ]);
     
+    // Sanitize CSV content to prevent formula injection
+    const sanitizeCell = (cell: any): string => {
+      const cellStr = String(cell);
+      // If cell starts with =, +, -, or @, prefix with apostrophe to prevent formula execution
+      if (cellStr.match(/^[=+\-@]/)) {
+        return `'"${cellStr.replace(/"/g, '""')}"`;
+      }
+      return `"${cellStr.replace(/"/g, '""')}"`;
+    };
+    
     const csvContent = [csvHeaders, ...csvRows]
-      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .map(row => row.map(sanitizeCell).join(','))
       .join('\n');
     
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -245,6 +273,52 @@ export default function AnalysisPage() {
     toast({
       title: "Keywords Downloaded! 📊",
       description: `${basicResults.keywords.length} keywords with content strategy exported to CSV.`,
+    });
+  };
+
+  // Helper functions for keyword filtering and sorting
+  const filterAndSortKeywords = (keywords: any[]) => {
+    let filtered = keywords.filter(keyword => {
+      const matchesSearch = keyword.keyword.toLowerCase().includes(keywordFilter.search.toLowerCase());
+      const matchesDifficulty = !keywordFilter.difficulty || keyword.difficulty === keywordFilter.difficulty;
+      const matchesIntent = !keywordFilter.intent || keyword.intent === keywordFilter.intent;
+      const matchesLocation = !keywordFilter.location || keyword.location?.toLowerCase().includes(keywordFilter.location.toLowerCase());
+      
+      return matchesSearch && matchesDifficulty && matchesIntent && matchesLocation;
+    });
+
+    filtered.sort((a, b) => {
+      let aValue = a[keywordSort.field];
+      let bValue = b[keywordSort.field];
+      
+      // Handle numeric fields
+      if (keywordSort.field === 'volume' || keywordSort.field === 'localSearchVolume' || keywordSort.field === 'competition' || keywordSort.field === 'cpc') {
+        aValue = Number(aValue) || 0;
+        bValue = Number(bValue) || 0;
+      }
+      
+      // Handle string fields
+      if (typeof aValue === 'string') {
+        aValue = aValue.toLowerCase();
+        bValue = bValue?.toLowerCase() || '';
+      }
+      
+      if (keywordSort.direction === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+
+    return filtered;
+  };
+
+  const clearKeywordFilters = () => {
+    setKeywordFilter({
+      search: '',
+      difficulty: '',
+      intent: '',
+      location: ''
     });
   };
 
@@ -851,15 +925,100 @@ export default function AnalysisPage() {
                               {/* Interactive Keyword List */}
                               <div>
                                 <div className="flex items-center justify-between mb-4">
-                                  <h5 className="font-semibold text-lg">Keyword Opportunities by Location</h5>
+                                  <h5 className="font-semibold text-lg">Interactive Keyword Analysis</h5>
                                   <Badge variant="secondary" className="bg-indigo-100 text-indigo-700">
                                     {basicResults.businessIntelligence?.location || 'Location Analysis'}
                                   </Badge>
                                 </div>
+
+                                {/* Keyword Filters and Search */}
+                                <div className="bg-white/50 dark:bg-gray-800/50 p-4 rounded-lg border border-indigo-200 dark:border-indigo-800 mb-6">
+                                  <div className="grid md:grid-cols-5 gap-4 mb-4">
+                                    <div>
+                                      <label className="text-sm font-medium mb-1 block">Search Keywords</label>
+                                      <input
+                                        type="text"
+                                        placeholder="Search keywords..."
+                                        value={keywordFilter.search}
+                                        onChange={(e) => setKeywordFilter({...keywordFilter, search: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700"
+                                        data-testid="input-keyword-search"
+                                      />
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium mb-1 block">Difficulty</label>
+                                      <select
+                                        value={keywordFilter.difficulty}
+                                        onChange={(e) => setKeywordFilter({...keywordFilter, difficulty: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700"
+                                        data-testid="select-keyword-difficulty"
+                                      >
+                                        <option value="">All Difficulties</option>
+                                        <option value="low">Low</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="high">High</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium mb-1 block">Intent</label>
+                                      <select
+                                        value={keywordFilter.intent}
+                                        onChange={(e) => setKeywordFilter({...keywordFilter, intent: e.target.value})}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700"
+                                        data-testid="select-keyword-intent"
+                                      >
+                                        <option value="">All Intents</option>
+                                        <option value="informational">Informational</option>
+                                        <option value="navigational">Navigational</option>
+                                        <option value="commercial">Commercial</option>
+                                        <option value="transactional">Transactional</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium mb-1 block">Sort By</label>
+                                      <select
+                                        value={`${keywordSort.field}-${keywordSort.direction}`}
+                                        onChange={(e) => {
+                                          const [field, direction] = e.target.value.split('-');
+                                          setKeywordSort({field, direction: direction as 'asc' | 'desc'});
+                                        }}
+                                        className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-sm bg-white dark:bg-gray-700"
+                                        data-testid="select-keyword-sort"
+                                      >
+                                        <option value="volume-desc">Volume (High to Low)</option>
+                                        <option value="volume-asc">Volume (Low to High)</option>
+                                        <option value="localSearchVolume-desc">Local Volume (High to Low)</option>
+                                        <option value="competition-asc">Competition (Low to High)</option>
+                                        <option value="competition-desc">Competition (High to Low)</option>
+                                        <option value="cpc-desc">CPC (High to Low)</option>
+                                        <option value="keyword-asc">Keyword (A to Z)</option>
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <label className="text-sm font-medium mb-1 block">Actions</label>
+                                      <Button
+                                        onClick={clearKeywordFilters}
+                                        variant="outline"
+                                        size="sm"
+                                        className="w-full"
+                                        data-testid="button-clear-filters"
+                                      >
+                                        Clear Filters
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    Showing {filterAndSortKeywords(basicResults.keywords).length} of {basicResults.keywords.length} keywords
+                                  </div>
+                                </div>
                                 
                                 <div className="space-y-3">
-                                  {basicResults.keywords.slice(0, 8).map((keyword, index) => (
-                                    <div key={index} className="bg-white/70 dark:bg-gray-800/70 p-4 rounded-lg border border-indigo-100 dark:border-indigo-900 hover:shadow-md transition-shadow">
+                                  {filterAndSortKeywords(basicResults.keywords).slice(0, 12).map((keyword, index) => (
+                                    <div 
+                                      key={index} 
+                                      className="bg-white/70 dark:bg-gray-800/70 p-4 rounded-lg border border-indigo-100 dark:border-indigo-900 hover:shadow-md transition-shadow"
+                                      data-testid={`keyword-card-${index}`}
+                                    >
                                       <div className="flex items-start justify-between mb-3">
                                         <div className="flex-1">
                                           <h6 className="font-semibold text-lg text-indigo-900 dark:text-indigo-100">{keyword.keyword}</h6>
