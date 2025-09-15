@@ -43,22 +43,26 @@ export default function Campaigns() {
   // Fetch campaign groups
   const { data: campaignGroups, isLoading: groupsLoading } = useQuery<CampaignGroup[]>({
     queryKey: ['/api/campaigns/me/groups'],
+    select: (data: any) => data?.data || [],
   });
 
   // Fetch campaigns for selected group
   const { data: campaigns, isLoading: campaignsLoading } = useQuery<Campaign[]>({
     queryKey: ['/api/campaigns', selectedGroupId],
     enabled: !!selectedGroupId,
+    select: (data: any) => data?.data || [],
   });
 
   // Fetch platforms for campaign creation
   const { data: platforms } = useQuery({
     queryKey: ['/api/campaigns/platforms'],
+    select: (data: any) => data?.data || [],
   });
 
   // Fetch user's platform credentials
   const { data: platformCredentials, isLoading: credentialsLoading } = useQuery<any[]>({
     queryKey: ['/api/campaigns/me/platforms'],
+    select: (data: any) => data?.data || [],
   });
 
   // Form handlers
@@ -88,7 +92,10 @@ export default function Campaigns() {
 
   // Mutations
   const createGroupMutation = useMutation({
-    mutationFn: (data: CreateGroupForm) => apiRequest('/api/campaigns/me/groups', 'POST', data),
+    mutationFn: async (data: CreateGroupForm) => {
+      const response = await apiRequest('POST', '/api/campaigns/me/groups', data);
+      return await response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns/me/groups'] });
       setCreateGroupOpen(false);
@@ -105,7 +112,10 @@ export default function Campaigns() {
   });
 
   const createCampaignMutation = useMutation({
-    mutationFn: (data: CreateCampaignForm) => apiRequest('/api/campaigns', 'POST', data),
+    mutationFn: async (data: CreateCampaignForm) => {
+      const response = await apiRequest('POST', '/api/campaigns', data);
+      return await response.json();
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns', selectedGroupId] });
       setCreateCampaignOpen(false);
