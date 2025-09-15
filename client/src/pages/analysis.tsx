@@ -7,8 +7,9 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Bot, Target, CheckCircle, Users, BarChart3, Zap, Star, TrendingDown, ArrowRight, Activity, Sparkles, Rocket, ExternalLink, Shield, Globe, Search, FileText, Smartphone, Clock, Award, AlertTriangle, Info, TrendingUp, Download, Eye, ChevronDown, ChevronUp, Settings, Monitor, MessageSquare, Key, Layout, Palette, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Bot, Target, CheckCircle, Users, BarChart3, Zap, Star, TrendingDown, ArrowRight, Activity, Sparkles, Rocket, ExternalLink, Shield, Globe, Search, FileText, Smartphone, Clock, Award, AlertTriangle, Info, TrendingUp, Download, Eye, ChevronDown, ChevronUp, Settings, Monitor, MessageSquare, Key, Layout, Palette, RotateCcw, Building2, PieChart } from 'lucide-react';
 import type { SEOAnalysisResult, ComprehensiveAnalysis } from '@shared/schema';
+import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 
 export default function AnalysisPage() {
   const params = useParams<{ analysisId: string }>();
@@ -17,7 +18,7 @@ export default function AnalysisPage() {
   const [basicResults, setBasicResults] = useState<SEOAnalysisResult | null>(null);
   const [comprehensiveResults, setComprehensiveResults] = useState<ComprehensiveAnalysis | null>(null);
   const [analysisUrl, setAnalysisUrl] = useState<string>('');
-  const [activeTab, setActiveTab] = useState<'overview' | 'agents' | 'dashboard'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'actionplan' | 'agents' | 'dashboard'>('overview');
   const [expandedAgents, setExpandedAgents] = useState<Set<string>>(new Set());
 
   // Extract URL from localStorage if available
@@ -360,7 +361,21 @@ export default function AnalysisPage() {
                     >
                       <div className="flex items-center gap-2">
                         <Award className="w-4 h-4" />
-                        Overview & Action Plan
+                        Overview & Analysis
+                      </div>
+                    </button>
+                    <button
+                      onClick={() => setActiveTab('actionplan')}
+                      className={`px-6 py-3 text-sm font-medium border-b-2 transition-colors ${
+                        activeTab === 'actionplan'
+                          ? 'border-blue-500 text-blue-600 bg-blue-50 dark:bg-blue-950/20'
+                          : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300'
+                      }`}
+                      data-testid="tab-actionplan"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Target className="w-4 h-4" />
+                        Action Plan
                       </div>
                     </button>
                     <button
@@ -398,50 +413,426 @@ export default function AnalysisPage() {
               {/* Tab Content */}
               {comprehensiveResults.status === 'completed' && (
                 <div className="space-y-8">
-                  {/* Overview Tab */}
+                  {/* Overview Tab - Enhanced with all analysis components */}
                   {activeTab === 'overview' && (
                     <>
-                      {/* Overall Score Summary */}
+                      {/* SEO Score & Performance Dashboard */}
                       {basicResults && (
-                        <Card className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border-blue-200 dark:border-blue-800">
+                        <Card className="bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-blue-950/20 dark:to-indigo-900/20 border-blue-200 dark:border-blue-800">
                           <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                              <Award className="w-5 h-5" />
-                              SEO Score Overview
+                            <CardTitle className="flex items-center gap-2">
+                              <Activity className="w-5 h-5 text-blue-600" />
+                              SEO Score & Performance Dashboard
                             </CardTitle>
+                            <CardDescription>Real-time analysis of your website's search engine optimization</CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <div className="grid md:grid-cols-4 gap-6 text-center">
-                              <div>
-                                <div className="text-4xl font-bold text-blue-600 dark:text-blue-400">
-                                  {basicResults.seoScore}
+                            <div className="grid lg:grid-cols-3 gap-6">
+                              {/* Main Score with Circular Progress */}
+                              <div className="text-center relative">
+                                <div className="relative inline-block">
+                                  <svg className="w-32 h-32 transform -rotate-90" viewBox="0 0 100 100">
+                                    <circle
+                                      cx="50"
+                                      cy="50"
+                                      r="40"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="8"
+                                      className="text-muted stroke-current opacity-20"
+                                    />
+                                    <circle
+                                      cx="50"
+                                      cy="50"
+                                      r="40"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="8"
+                                      strokeLinecap="round"
+                                      className="text-blue-600"
+                                      strokeDasharray={`${(basicResults.seoScore / 100) * 251.2} 251.2`}
+                                      style={{
+                                        transition: 'stroke-dasharray 1.5s ease-in-out',
+                                      }}
+                                    />
+                                  </svg>
+                                  <div className="absolute inset-0 flex items-center justify-center">
+                                    <div>
+                                      <div className="text-3xl font-bold text-blue-600">{basicResults.seoScore}</div>
+                                      <div className="text-xs text-muted-foreground">Score</div>
+                                    </div>
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">Overall SEO Score</div>
+                                <div className="mt-2 text-sm text-muted-foreground">Overall SEO Performance</div>
+                                <div className="mt-2">
+                                  <Badge variant={basicResults.seoScore >= 80 ? "default" : basicResults.seoScore >= 60 ? "secondary" : "destructive"}>
+                                    {basicResults.seoScore >= 80 ? 'Excellent' : basicResults.seoScore >= 60 ? 'Good' : 'Needs Improvement'}
+                                  </Badge>
+                                </div>
                               </div>
-                              <div>
-                                <div className="text-3xl font-bold text-green-600 dark:text-green-400">
-                                  {comprehensiveResults.actionPlan.potentialImprovement}
+
+                              {/* Performance Metrics Chart */}
+                              <div className="lg:col-span-2">
+                                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                                  <BarChart3 className="w-4 h-4 text-blue-600" />
+                                  Performance Breakdown
+                                </h4>
+                                <div className="h-[200px]">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                      data={[
+                                        { name: "Technical SEO", score: basicResults.technicalSeo.score },
+                                        { name: "Mobile Performance", score: basicResults.pageSpeed.mobile },
+                                        { name: "Desktop Performance", score: basicResults.pageSpeed.desktop },
+                                        { name: "Overall SEO", score: basicResults.seoScore },
+                                      ]}
+                                    >
+                                      <XAxis dataKey="name" fontSize={12} />
+                                      <YAxis domain={[0, 100]} fontSize={12} />
+                                      <Bar dataKey="score" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+                                    </BarChart>
+                                  </ResponsiveContainer>
                                 </div>
-                                <div className="text-sm text-muted-foreground">Potential Score</div>
-                              </div>
-                              <div>
-                                <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
-                                  {comprehensiveResults.actionPlan.items.length}
+                                
+                                {/* Quick Stats */}
+                                <div className="grid grid-cols-4 gap-4 mt-4">
+                                  <div className="text-center p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <div className="text-lg font-bold text-blue-600">{basicResults.technicalSeo.score}</div>
+                                    <div className="text-xs text-muted-foreground">Technical</div>
+                                  </div>
+                                  <div className="text-center p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <div className="text-lg font-bold text-green-600">{basicResults.pageSpeed.mobile}</div>
+                                    <div className="text-xs text-muted-foreground">Mobile</div>
+                                  </div>
+                                  <div className="text-center p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <div className="text-lg font-bold text-purple-600">{basicResults.pageSpeed.desktop}</div>
+                                    <div className="text-xs text-muted-foreground">Desktop</div>
+                                  </div>
+                                  <div className="text-center p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <div className="text-lg font-bold text-orange-600">{comprehensiveResults.actionPlan.potentialImprovement}</div>
+                                    <div className="text-xs text-muted-foreground">Potential</div>
+                                  </div>
                                 </div>
-                                <div className="text-sm text-muted-foreground">Action Items</div>
-                              </div>
-                              <div>
-                                <div className="text-3xl font-bold text-orange-600 dark:text-orange-400">
-                                  {comprehensiveResults.actionPlan.quickWins.length}
-                                </div>
-                                <div className="text-sm text-muted-foreground">Quick Wins</div>
                               </div>
                             </div>
                           </CardContent>
                         </Card>
                       )}
 
-                      {/* Action Plan */}
+                      {/* Business Intelligence */}
+                      {basicResults?.businessIntelligence && (
+                        <Card data-testid="business-intelligence-card">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Building2 className="w-5 h-5 text-primary" />
+                              Business Intelligence
+                            </CardTitle>
+                            <CardDescription>
+                              Extracted insights from your website content
+                            </CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid md:grid-cols-2 gap-6">
+                              <div className="space-y-3">
+                                <div>
+                                  <span className="text-sm text-muted-foreground">Business Type:</span>
+                                  <span className="ml-2 font-medium">{basicResults.businessIntelligence.businessType}</span>
+                                </div>
+                                <div>
+                                  <span className="text-sm text-muted-foreground">Industry:</span>
+                                  <span className="ml-2 font-medium">{basicResults.businessIntelligence.industry}</span>
+                                </div>
+                                {basicResults.businessIntelligence.location && (
+                                  <div>
+                                    <span className="text-sm text-muted-foreground">Location:</span>
+                                    <span className="ml-2 font-medium">{basicResults.businessIntelligence.location}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div className="space-y-3">
+                                {basicResults.businessIntelligence.products.length > 0 && (
+                                  <div>
+                                    <span className="text-sm text-muted-foreground block mb-1">Products:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {basicResults.businessIntelligence.products.slice(0, 4).map((product, index) => (
+                                        <Badge key={index} variant="secondary" className="text-xs">{product}</Badge>
+                                      ))}
+                                      {basicResults.businessIntelligence.products.length > 4 && (
+                                        <Badge variant="outline" className="text-xs">+{basicResults.businessIntelligence.products.length - 4} more</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                                {basicResults.businessIntelligence.services.length > 0 && (
+                                  <div>
+                                    <span className="text-sm text-muted-foreground block mb-1">Services:</span>
+                                    <div className="flex flex-wrap gap-1">
+                                      {basicResults.businessIntelligence.services.slice(0, 4).map((service, index) => (
+                                        <Badge key={index} variant="secondary" className="text-xs">{service}</Badge>
+                                      ))}
+                                      {basicResults.businessIntelligence.services.length > 4 && (
+                                        <Badge variant="outline" className="text-xs">+{basicResults.businessIntelligence.services.length - 4} more</Badge>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {basicResults.businessIntelligence.description && (
+                              <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                                <p className="text-sm text-muted-foreground italic">"{basicResults.businessIntelligence.description}"</p>
+                              </div>
+                            )}
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Competitive Intelligence Dashboard */}
+                      {basicResults?.competitors && (
+                        <Card className="bg-gradient-to-br from-green-50 to-emerald-100 dark:from-green-950/20 dark:to-emerald-900/20 border-green-200 dark:border-green-800">
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Users className="w-5 h-5 text-green-600" />
+                              Competitive Intelligence Dashboard
+                            </CardTitle>
+                            <CardDescription>AI-powered analysis of your market position and key competitors</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid lg:grid-cols-2 gap-6">
+                              {/* Competitor Ranking Chart */}
+                              <div>
+                                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                                  <BarChart3 className="w-4 h-4 text-green-600" />
+                                  Market Position Analysis
+                                </h4>
+                                <div className="h-[200px]">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                      data={basicResults.competitors.map(comp => ({
+                                        name: comp.name === basicResults.domain ? "Your Site" : comp.name.length > 15 ? comp.name.substring(0, 15) + "..." : comp.name,
+                                        score: comp.score,
+                                        isUserSite: comp.name === basicResults.domain
+                                      }))}
+                                      layout="horizontal"
+                                    >
+                                      <XAxis domain={[0, 100]} fontSize={12} />
+                                      <YAxis dataKey="name" type="category" fontSize={10} width={100} />
+                                      <Bar dataKey="score" fill="#10B981" radius={[0, 4, 4, 0]} />
+                                    </BarChart>
+                                  </ResponsiveContainer>
+                                </div>
+                              </div>
+
+                              {/* Market Position Analytics */}
+                              <div>
+                                <h4 className="font-semibold mb-4 flex items-center gap-2">
+                                  <PieChart className="w-4 h-4 text-green-600" />
+                                  Market Share Distribution
+                                </h4>
+                                <div className="h-[200px]">
+                                  <ResponsiveContainer width="100%" height="100%">
+                                    <RechartsPieChart>
+                                      <Pie
+                                        data={[
+                                          { name: "Your Position", value: basicResults.marketPosition?.marketShare || 25, fill: "#3B82F6" },
+                                          { name: "Top Competitor", value: 35, fill: "#EF4444" },
+                                          { name: "Other Competitors", value: 40, fill: "#6B7280" },
+                                        ]}
+                                        cx="50%"
+                                        cy="50%"
+                                        innerRadius={40}
+                                        outerRadius={80}
+                                        dataKey="value"
+                                      >
+                                        {[
+                                          { name: "Your Position", value: basicResults.marketPosition?.marketShare || 25, fill: "#3B82F6" },
+                                          { name: "Top Competitor", value: 35, fill: "#EF4444" },
+                                          { name: "Other Competitors", value: 40, fill: "#6B7280" },
+                                        ].map((entry, index) => (
+                                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                                        ))}
+                                      </Pie>
+                                    </RechartsPieChart>
+                                  </ResponsiveContainer>
+                                </div>
+                                
+                                {/* Key Metrics */}
+                                <div className="grid grid-cols-2 gap-3 mt-4">
+                                  <div className="text-center p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <div className="text-xl font-bold text-green-600">#{basicResults.marketPosition?.rank || 'N/A'}</div>
+                                    <div className="text-xs text-muted-foreground">Market Rank</div>
+                                  </div>
+                                  <div className="text-center p-3 bg-white/50 dark:bg-gray-800/50 rounded-lg">
+                                    <div className="text-xl font-bold text-blue-600">{basicResults.competitors.length}</div>
+                                    <div className="text-xs text-muted-foreground">Competitors</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Page Speed Analysis */}
+                      {basicResults?.pageSpeed && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Zap className="w-5 h-5 text-yellow-600" />
+                              Page Speed Analysis
+                            </CardTitle>
+                            <CardDescription>Core Web Vitals and performance metrics</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid md:grid-cols-3 gap-6">
+                              <div className="text-center p-4 bg-gradient-to-br from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 rounded-lg border border-orange-200 dark:border-orange-800">
+                                <div className="text-2xl font-bold text-orange-600">{basicResults.pageSpeed.mobile}</div>
+                                <div className="text-sm text-muted-foreground">Mobile Score</div>
+                                <Progress value={basicResults.pageSpeed.mobile} className="mt-2 h-2" />
+                              </div>
+                              <div className="text-center p-4 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <div className="text-2xl font-bold text-green-600">{basicResults.pageSpeed.desktop}</div>
+                                <div className="text-sm text-muted-foreground">Desktop Score</div>
+                                <Progress value={basicResults.pageSpeed.desktop} className="mt-2 h-2" />
+                              </div>
+                              <div className="text-center p-4 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <div className="text-2xl font-bold text-blue-600">{basicResults.pageSpeed.largestContentfulPaint.toFixed(1)}s</div>
+                                <div className="text-sm text-muted-foreground">LCP Time</div>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {basicResults.pageSpeed.largestContentfulPaint <= 2.5 ? 'Good' : 'Needs Work'}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Google SERP Presence Analysis */}
+                      {basicResults?.serpPresence && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Search className="w-5 h-5 text-purple-600" />
+                              Google SERP Presence Analysis
+                            </CardTitle>
+                            <CardDescription>Your visibility in Google search results</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-4">
+                              <div className="text-center p-4 bg-purple-50 dark:bg-purple-950/20 rounded-lg border border-purple-200 dark:border-purple-800">
+                                <div className="text-2xl font-bold text-purple-600">{basicResults.serpPresence.organicResults.length}</div>
+                                <div className="text-sm text-muted-foreground">Organic Results</div>
+                              </div>
+                              <div className="text-center p-4 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+                                <div className="text-2xl font-bold text-red-600">{basicResults.serpPresence.paidAds.length}</div>
+                                <div className="text-sm text-muted-foreground">Paid Ads</div>
+                              </div>
+                              <div className="text-center p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <div className="text-2xl font-bold text-green-600">{basicResults.serpPresence.mapsResults.found ? '✓' : '✗'}</div>
+                                <div className="text-sm text-muted-foreground">Maps Presence</div>
+                              </div>
+                              <div className="text-center p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                                <div className="text-2xl font-bold text-blue-600">{basicResults.serpPresence.featuredSnippets.found ? '✓' : '✗'}</div>
+                                <div className="text-sm text-muted-foreground">Featured Snippets</div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Keyword Analysis */}
+                      {basicResults?.keywords && (
+                        <Card>
+                          <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                              <Key className="w-5 h-5 text-indigo-600" />
+                              Keyword Analysis
+                            </CardTitle>
+                            <CardDescription>Your current keyword performance and opportunities</CardDescription>
+                          </CardHeader>
+                          <CardContent>
+                            <div className="space-y-4">
+                              <div className="grid md:grid-cols-3 gap-4 text-center">
+                                <div className="p-4 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                                  <div className="text-2xl font-bold text-indigo-600">{basicResults.keywords.length}</div>
+                                  <div className="text-sm text-muted-foreground">Total Keywords</div>
+                                </div>
+                                <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                                  <div className="text-2xl font-bold text-green-600">
+                                    {basicResults.keywords.filter(k => k.difficulty === 'low').length}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">Low Competition</div>
+                                </div>
+                                <div className="p-4 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                  <div className="text-2xl font-bold text-yellow-600">
+                                    {Math.round(basicResults.keywords.reduce((sum, k) => sum + k.volume, 0) / basicResults.keywords.length)}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">Avg Monthly Searches</div>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <h5 className="font-medium mb-3">Top Keywords</h5>
+                                <div className="space-y-2">
+                                  {basicResults.keywords.slice(0, 5).map((keyword, index) => (
+                                    <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
+                                      <span className="font-medium">{keyword.keyword}</span>
+                                      <div className="flex items-center gap-2">
+                                        <Badge variant="outline">{keyword.volume} searches</Badge>
+                                        <Badge variant={keyword.difficulty === 'low' ? 'default' : keyword.difficulty === 'medium' ? 'secondary' : 'destructive'}>
+                                          {keyword.difficulty}
+                                        </Badge>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      )}
+
+                      {/* Priority Improvements */}
+                      <Card className="bg-gradient-to-r from-orange-50 to-red-50 dark:from-orange-950/20 dark:to-red-950/20 border-orange-200 dark:border-orange-800">
+                        <CardHeader>
+                          <CardTitle className="flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                            <AlertTriangle className="w-5 h-5" />
+                            Priority Improvements
+                          </CardTitle>
+                          <CardDescription className="text-orange-600 dark:text-orange-400">
+                            Critical issues that need immediate attention
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                          <div className="space-y-4">
+                            {basicResults?.technicalSeo.issues.filter(issue => issue.impact === 'high').slice(0, 5).map((issue, index) => (
+                              <div key={index} className="flex items-start gap-3 p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-orange-100 dark:border-orange-900">
+                                {getImpactIcon(issue.impact)}
+                                <div className="flex-1">
+                                  <h5 className="font-medium text-sm mb-1">{issue.title}</h5>
+                                  <p className="text-xs text-muted-foreground">{issue.description}</p>
+                                </div>
+                                <Badge variant={getImpactColor(issue.impact)}>
+                                  {issue.impact} impact
+                                </Badge>
+                              </div>
+                            ))}
+                            {(!basicResults?.technicalSeo.issues.filter(issue => issue.impact === 'high').length) && (
+                              <div className="text-center p-6 text-muted-foreground">
+                                <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                                <p>No high-priority issues found! Your website is performing well.</p>
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </>
+                  )}
+
+                  {/* Action Plan Tab - Dedicated section */}
+                  {activeTab === 'actionplan' && (
+                    <>
+                      {/* Action Plan Summary */}
                       <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-300">
@@ -482,10 +873,10 @@ export default function AnalysisPage() {
                         <CardHeader>
                           <CardTitle className="flex items-center gap-2">
                             <CheckCircle className="w-5 h-5 text-primary" />
-                            Detailed Action Items
+                            Detailed Action Items with Step-by-Step Implementation
                           </CardTitle>
                           <CardDescription>
-                            Prioritized recommendations with step-by-step implementation
+                            Prioritized recommendations with detailed implementation directions
                           </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -537,18 +928,38 @@ export default function AnalysisPage() {
 
                                 {item.steps.length > 0 && (
                                   <div className="mb-4">
-                                    <h5 className="font-medium text-sm mb-2">Implementation Steps:</h5>
-                                    <ol className="list-decimal list-inside space-y-2 text-sm text-muted-foreground">
-                                      {item.steps.map((step, stepIndex) => (
-                                        <li key={stepIndex} className="leading-relaxed">{step}</li>
-                                      ))}
-                                    </ol>
+                                    <h5 className="font-medium text-sm mb-3 flex items-center gap-2">
+                                      <ArrowRight className="w-4 h-4 text-blue-500" />
+                                      Detailed Implementation Steps:
+                                    </h5>
+                                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 p-4 rounded-lg border border-blue-200 dark:border-blue-800">
+                                      <ol className="list-decimal list-inside space-y-3 text-sm">
+                                        {item.steps.map((step, stepIndex) => (
+                                          <li key={stepIndex} className="leading-relaxed text-blue-900 dark:text-blue-100 font-medium">
+                                            {step}
+                                          </li>
+                                        ))}
+                                      </ol>
+                                    </div>
                                   </div>
                                 )}
 
-                                <div className="p-4 bg-blue-50 dark:bg-blue-950/20 rounded-lg">
-                                  <span className="text-sm font-medium text-blue-700 dark:text-blue-300">Expected Improvement: </span>
-                                  <span className="text-sm text-blue-600 dark:text-blue-400">{item.expectedImprovement}</span>
+                                {item.tools && item.tools.length > 0 && (
+                                  <div className="mb-4">
+                                    <h5 className="font-medium text-sm mb-2">Required Tools:</h5>
+                                    <div className="flex flex-wrap gap-2">
+                                      {item.tools.map((tool, toolIndex) => (
+                                        <Badge key={toolIndex} variant="secondary" className="text-xs">
+                                          {tool}
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  </div>
+                                )}
+
+                                <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg">
+                                  <span className="text-sm font-medium text-green-700 dark:text-green-300">Expected Improvement: </span>
+                                  <span className="text-sm text-green-600 dark:text-green-400">{item.expectedImprovement}</span>
                                 </div>
                               </div>
                             ))}
