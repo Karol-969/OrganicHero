@@ -1,0 +1,219 @@
+You are a senior full-stack developer tasked with building a comprehensive multi-platform campaign management feature for our existing SEO platform. This is a PREMIUM PAID FEATURE that will be added alongside our current SEO analysis capabilities - DO NOT modify any existing SEO functionality.
+
+CRITICAL: PRESERVE ALL EXISTING FEATURES - Only add new campaign management capabilities to the current codebase.
+
+CURRENT CODEBASE CONTEXT:
+- React + TypeScript frontend with shadcn/ui components
+- Express.js backend with TypeScript  
+- Existing SEO analysis with agents and business intelligence
+- Uses OpenAI for AI insights
+- Wouter routing system
+- Current routes: "/" (home), "/analysis/:analysisId"
+- Existing header navigation for SEO features
+
+FEATURE REQUIREMENTS - BUILD COMPLETE CAMPAIGN MANAGEMENT SYSTEM:
+
+1. **Campaign Dashboard & Navigation**
+   - Add NEW route `/campaigns` without touching existing routes
+   - Add "Campaigns" link to existing header navigation
+   - Create main campaigns dashboard with overview metrics
+   - Campaign listing page with status indicators (Active, Paused, Completed)
+   - Quick stats cards showing total spend, conversions, ROAS across all platforms
+
+2. **Multi-Platform Connection System**
+   - Secure credential storage for Google Ads, Meta (Facebook/Instagram), TikTok
+   - OAuth 2.0 flows for each platform authentication
+   - Connection status indicators and management UI
+   - Platform health monitoring and token refresh automation
+   - Encrypted credential storage with proper security practices
+
+3. **Interactive Campaign Builder (DAG-Style)**
+   - Implement React Flow library for drag-and-drop workflow builder
+   - Node types: Audience Targeting, Creative Assets, Budget Allocation, Scheduling, Optimization Rules, Reporting
+   - Visual workflow validation and real-time preview
+   - Template library for common campaign structures
+   - Cross-platform workflow compatibility
+
+4. **Comprehensive Campaign Creation**
+   - Multi-step wizard for campaign setup across all platforms
+   - Platform-specific campaign type selection (Search, Display, Video, Shopping for Google; Feed, Stories, Reels for Meta; In-Feed, Spark Ads for TikTok)
+   - Advanced audience targeting with demographic, interest, and behavioral options
+   - Creative asset management with bulk upload and optimization
+   - Budget allocation strategies (daily, lifetime, shared across platforms)
+   - Automated bidding strategies and manual bid controls
+   - Campaign scheduling with timezone management
+
+5. **Customer Data Integration**
+   - Custom audience upload functionality (CSV, direct input)
+   - Customer data matching across platforms
+   - Lookalike audience creation based on customer data
+   - Custom event tracking and conversion setup
+   - CRM integration capabilities
+   - GDPR-compliant data handling and user consent management
+
+6. **Real-time Performance Monitoring**
+   - Live dashboard with platform-specific metrics
+   - Unified metrics view across all connected platforms
+   - Interactive charts using Recharts library
+   - Key performance indicators: Impressions, Clicks, Conversions, Cost-per-click, Cost-per-acquisition, Return on ad spend
+   - Platform comparison and performance benchmarking
+   - Real-time alert system for budget limits, performance thresholds
+   - Automated performance notifications via email/in-app
+
+7. **Advanced Reporting & Analytics**
+   - Custom report builder with drag-and-drop interface
+   - Cross-platform attribution modeling
+   - ROI and ROAS calculations with custom conversion values
+   - Performance reports downloadable in PDF, Excel, CSV formats
+   - Scheduled report delivery via email
+   - White-label reporting options for agencies
+   - Campaign performance forecasting using historical data
+
+8. **Native Platform Report Downloads**
+   - Direct integration with each platform's reporting API
+   - Download native reports from Google Ads, Meta Business Manager, TikTok Ads Manager
+   - Automated report scheduling and storage
+   - Historical data retention and archival
+   - Bulk report download functionality
+
+9. **Campaign Optimization Engine**
+   - AI-powered performance analysis using existing OpenAI integration
+   - Automated bid adjustments based on performance goals
+   - Budget reallocation recommendations across platforms
+   - A/B testing management for ads, audiences, and landing pages
+   - Performance prediction models using machine learning
+   - Automated pause/resume functionality for underperforming campaigns
+
+10. **Subscription & Access Control**
+    - Tiered pricing structure (Basic, Pro, Enterprise)
+    - Feature access control based on subscription level
+    - Usage tracking and billing integration
+    - Payment processing with Stripe integration
+    - Trial period management
+    - Usage-based pricing for enterprise clients
+
+TECHNICAL IMPLEMENTATION REQUIREMENTS:
+
+Backend (Express.js):
+- Create comprehensive routes under `/api/campaigns/*` including:
+  - `/api/campaigns/connect/:platform` for OAuth flows
+  - `/api/campaigns/create` for campaign creation
+  - `/api/campaigns/:id/performance` for real-time metrics
+  - `/api/campaigns/reports/download` for native platform reports
+  - `/api/campaigns/audiences/upload` for customer data
+  - `/api/campaigns/optimize` for AI-powered optimization
+- Implement MCP (Model Context Protocol) server architecture for each platform
+- Add comprehensive database schemas for campaigns, connections, performance data, customer audiences
+- Create background job system for data synchronization and reporting
+- Implement proper rate limiting for platform API calls
+- Add webhook endpoints for real-time platform notifications
+
+Frontend (React):
+- Create complete component library in `client/src/components/campaigns/`
+- Add comprehensive pages in `client/src/pages/campaigns/`
+- Integrate React Flow for visual campaign builder
+- Implement real-time updates using WebSockets
+- Add platform-specific UI components matching each platform's design patterns
+- Create responsive mobile-first design
+- Implement comprehensive error handling and loading states
+
+Database Schema:
+- Campaigns table with platform associations and metadata
+- Platform credentials table (encrypted storage)
+- Performance metrics tables with time-series data
+- Customer audiences and segments tables
+- Billing and subscription data
+- Audit logs for all campaign actions
+
+Platform API Integrations:
+- Google Ads API for complete campaign management
+- Meta Business API for Facebook/Instagram campaigns
+- TikTok for Business API for TikTok campaigns
+- Stripe API for payment processing and billing
+- Each platform's reporting API for native downloads
+
+Security & Compliance:
+- End-to-end encryption for all stored credentials
+- Proper OAuth token refresh mechanisms
+- Comprehensive audit logging for all campaign actions
+- GDPR compliance for customer data handling
+- SOC 2 compliance preparation
+- Rate limiting and DDoS protection
+
+Customer Data Features:
+- Secure customer data upload with field mapping
+- Data validation and cleaning processes
+- Custom audience creation workflows
+- Lookalike audience generation
+- Customer lifetime value calculations
+- Segmentation and targeting tools
+
+Performance Optimization:
+- Caching strategies for platform data
+- Database query optimization
+- Lazy loading for large datasets
+- Background processing for heavy operations
+- CDN integration for asset delivery
+
+PLATFORM-SPECIFIC OPERATIONS TO IMPLEMENT:
+
+Google Ads:
+- Campaign creation (Search, Display, Shopping, Video, Performance Max)
+- Keyword research and management
+- Ad group organization and management
+- Extensions management (sitelinks, callouts, etc.)
+- Bid strategies and budget optimization
+- Quality Score monitoring and improvement
+- Negative keyword management
+- Conversion tracking setup
+
+Meta (Facebook/Instagram):
+- Campaign objectives (Traffic, Conversions, Lead Generation, etc.)
+- Audience creation and management
+- Creative testing and optimization
+- Placement optimization (Feed, Stories, Reels, etc.)
+- Pixel setup and conversion tracking
+- Lookalike audience creation
+- Dynamic product ads for e-commerce
+
+TikTok Ads:
+- Campaign creation (Reach, Traffic, Conversions, etc.)
+- Creative management for video ads
+- Audience targeting and interest selection
+- Spark Ads integration with organic content
+- Pixel integration and event tracking
+- Creative optimization recommendations
+
+DELIVERABLES:
+1. Complete campaign management system with all listed features
+2. Responsive UI matching existing shadcn/ui design system
+3. Comprehensive error handling and user feedback
+4. Unit and integration tests for critical functionality
+5. API documentation for all new endpoints
+6. Database migration scripts
+7. Security audit documentation
+8. User guide and feature documentation
+9. Performance optimization report
+10. Billing and subscription integration
+
+CONSTRAINTS:
+- Maintain existing React + Express + TypeScript tech stack
+- Use current shadcn/ui components and design patterns
+- Preserve ALL existing SEO analysis functionality
+- Follow existing code patterns and project structure
+- Ensure scalable architecture for enterprise clients
+- Implement proper error handling throughout
+- Follow security best practices for credential storage
+- Ensure GDPR and privacy compliance
+
+SUCCESS CRITERIA:
+- Users can connect multiple advertising platforms seamlessly
+- Complete campaign creation and management workflows
+- Real-time performance monitoring across all platforms
+- Automated optimization and reporting capabilities
+- Secure handling of customer data and platform credentials
+- Native platform report download functionality
+- Subscription-based access control
+- Production-ready scalable architecture
+
+Build this as a comprehensive, enterprise-grade campaign management platform that transforms our SEO tool into a complete digital marketing suite while preserving all existing functionality.
