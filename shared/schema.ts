@@ -44,8 +44,25 @@ export const seoAnalysisSchema = z.object({
   keywords: z.array(z.object({
     keyword: z.string(),
     position: z.number().optional(),
-    difficulty: z.string(),
+    difficulty: z.enum(['low', 'medium', 'high']),
     volume: z.number(),
+    competition: z.number().optional(), // 0-100 score
+    cpc: z.number().optional(), // Cost per click
+    trend: z.enum(['rising', 'stable', 'declining']).optional(),
+    intent: z.enum(['informational', 'navigational', 'commercial', 'transactional']).optional(),
+    localSearchVolume: z.number().optional(), // Location-specific search volume
+    location: z.string().optional(), // Target location for this keyword
+    seasonality: z.object({
+      isSeasonsal: z.boolean(),
+      peakMonths: z.array(z.string()),
+    }).optional(),
+    contentStrategy: z.object({
+      contentType: z.enum(['blog_post', 'landing_page', 'product_page', 'guide', 'faq', 'video', 'infographic']),
+      contentLength: z.string(), // e.g., "1500-2000 words"
+      targetAudience: z.string(),
+      contentFormat: z.string(),
+      callToAction: z.string(),
+    }).optional(),
   })),
   improvements: z.array(z.object({
     title: z.string(),

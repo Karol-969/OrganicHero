@@ -2237,10 +2237,82 @@ class KeywordResearchAgent extends AnalysisAgent {
     products.forEach(product => {
       if (product && product.length > 2) {
         keywords.push(
-          { keyword: product, volume: Math.floor(Math.random() * 1500) + 300, difficulty: 'low', impressions: Math.floor(Math.random() * 8000) + 2000 },
-          { keyword: `best ${product}`, volume: Math.floor(Math.random() * 800) + 200, difficulty: 'medium', impressions: Math.floor(Math.random() * 5000) + 1500 },
-          { keyword: `${product} near me`, volume: Math.floor(Math.random() * 1200) + 400, difficulty: 'high', impressions: Math.floor(Math.random() * 7000) + 3000 },
-          { keyword: `authentic ${product}`, volume: Math.floor(Math.random() * 600) + 150, difficulty: 'low', impressions: Math.floor(Math.random() * 4000) + 1200 }
+          { 
+            keyword: product, 
+            volume: Math.floor(Math.random() * 1500) + 300, 
+            difficulty: 'low',
+            competition: Math.floor(Math.random() * 30) + 20,
+            cpc: Math.random() * 2 + 1,
+            trend: 'stable',
+            intent: 'commercial',
+            localSearchVolume: Math.floor(Math.random() * 500) + 150,
+            location: location,
+            contentStrategy: {
+              contentType: 'product_page',
+              contentLength: '600-1000 words',
+              targetAudience: 'Food enthusiasts looking for specific dishes',
+              contentFormat: 'Product page with high-quality images, ingredients, preparation method, and customer reviews',
+              callToAction: 'Order Now or Make Reservation'
+            },
+            impressions: Math.floor(Math.random() * 8000) + 2000 
+          },
+          { 
+            keyword: `best ${product}`, 
+            volume: Math.floor(Math.random() * 800) + 200, 
+            difficulty: 'medium',
+            competition: Math.floor(Math.random() * 25) + 40,
+            cpc: Math.random() * 2.5 + 1.5,
+            trend: 'rising',
+            intent: 'commercial',
+            localSearchVolume: Math.floor(Math.random() * 300) + 100,
+            location: location,
+            contentStrategy: {
+              contentType: 'blog_post',
+              contentLength: '1200-1800 words',
+              targetAudience: 'Quality-conscious food lovers seeking the best options',
+              contentFormat: 'Comprehensive guide explaining what makes your dish the best, with comparisons and customer testimonials',
+              callToAction: 'Experience the Best - Order Today'
+            },
+            impressions: Math.floor(Math.random() * 5000) + 1500 
+          },
+          { 
+            keyword: `${product} near me`, 
+            volume: Math.floor(Math.random() * 1200) + 400, 
+            difficulty: 'high',
+            competition: Math.floor(Math.random() * 20) + 60,
+            cpc: Math.random() * 3 + 2,
+            trend: 'stable',
+            intent: 'commercial',
+            localSearchVolume: Math.floor(Math.random() * 1200) + 400,
+            location: location,
+            contentStrategy: {
+              contentType: 'landing_page',
+              contentLength: '800-1200 words',
+              targetAudience: 'Local customers searching for nearby food options',
+              contentFormat: 'Location-optimized page with Google Maps, directions, hours, and local SEO elements',
+              callToAction: 'Find Us & Order Now'
+            },
+            impressions: Math.floor(Math.random() * 7000) + 3000 
+          },
+          { 
+            keyword: `authentic ${product}`, 
+            volume: Math.floor(Math.random() * 600) + 150, 
+            difficulty: 'low',
+            competition: Math.floor(Math.random() * 25) + 15,
+            cpc: Math.random() * 1.5 + 1,
+            trend: 'rising',
+            intent: 'informational',
+            localSearchVolume: Math.floor(Math.random() * 200) + 75,
+            location: location,
+            contentStrategy: {
+              contentType: 'blog_post',
+              contentLength: '1000-1500 words',
+              targetAudience: 'Culture enthusiasts and authenticity seekers',
+              contentFormat: 'Educational content about authentic preparation, cultural significance, and traditional methods',
+              callToAction: 'Taste Authentic Flavors'
+            },
+            impressions: Math.floor(Math.random() * 4000) + 1200 
+          }
         );
       }
     });
@@ -2250,11 +2322,101 @@ class KeywordResearchAgent extends AnalysisAgent {
   
   private generateLocationKeywords(location: string): any[] {
     return [
-      { keyword: `restaurant ${location}`, volume: 2400, difficulty: 'high', impressions: 15000 },
-      { keyword: `dining ${location}`, volume: 1800, difficulty: 'high', impressions: 12000 },
-      { keyword: `food ${location}`, volume: 3200, difficulty: 'high', impressions: 18000 },
-      { keyword: `best restaurant ${location}`, volume: 1600, difficulty: 'high', impressions: 11000 },
-      { keyword: `${location} food delivery`, volume: 2100, difficulty: 'high', impressions: 14000 }
+      { 
+        keyword: `restaurant ${location}`, 
+        volume: 2400, 
+        difficulty: 'high',
+        competition: Math.floor(Math.random() * 15) + 75,
+        cpc: Math.random() * 2 + 3,
+        trend: 'stable',
+        intent: 'commercial',
+        localSearchVolume: 2400,
+        location: location,
+        contentStrategy: {
+          contentType: 'landing_page',
+          contentLength: '1200-1800 words',
+          targetAudience: 'Local diners searching for restaurants in their area',
+          contentFormat: 'Location-specific landing page with local SEO, testimonials, directions, and area information',
+          callToAction: 'Book Your Table Now'
+        },
+        impressions: 15000 
+      },
+      { 
+        keyword: `dining ${location}`, 
+        volume: 1800, 
+        difficulty: 'high',
+        competition: Math.floor(Math.random() * 15) + 70,
+        cpc: Math.random() * 2.5 + 2.5,
+        trend: 'stable',
+        intent: 'commercial',
+        localSearchVolume: 1800,
+        location: location,
+        contentStrategy: {
+          contentType: 'guide',
+          contentLength: '1500-2000 words',
+          targetAudience: 'Food enthusiasts looking for dining experiences',
+          contentFormat: 'Comprehensive dining guide featuring ambiance, menu highlights, and local dining culture',
+          callToAction: 'Discover Fine Dining'
+        },
+        impressions: 12000 
+      },
+      { 
+        keyword: `food ${location}`, 
+        volume: 3200, 
+        difficulty: 'high',
+        competition: Math.floor(Math.random() * 10) + 80,
+        cpc: Math.random() * 1.5 + 3.5,
+        trend: 'rising',
+        intent: 'informational',
+        localSearchVolume: 3200,
+        location: location,
+        contentStrategy: {
+          contentType: 'blog_post',
+          contentLength: '2000-2500 words',
+          targetAudience: 'Food lovers exploring local cuisine options',
+          contentFormat: 'Local food guide with restaurant recommendations, food culture, and local specialties',
+          callToAction: 'Explore Local Flavors'
+        },
+        impressions: 18000 
+      },
+      { 
+        keyword: `best restaurant ${location}`, 
+        volume: 1600, 
+        difficulty: 'high',
+        competition: Math.floor(Math.random() * 10) + 85,
+        cpc: Math.random() * 2 + 4,
+        trend: 'stable',
+        intent: 'commercial',
+        localSearchVolume: 1600,
+        location: location,
+        contentStrategy: {
+          contentType: 'landing_page',
+          contentLength: '1000-1500 words',
+          targetAudience: 'Quality-conscious diners seeking the best local restaurants',
+          contentFormat: 'Competitive positioning page highlighting awards, reviews, and unique selling propositions',
+          callToAction: 'Experience the Best'
+        },
+        impressions: 11000 
+      },
+      { 
+        keyword: `${location} food delivery`, 
+        volume: 2100, 
+        difficulty: 'high',
+        competition: Math.floor(Math.random() * 20) + 60,
+        cpc: Math.random() * 1.5 + 2,
+        trend: 'rising',
+        intent: 'transactional',
+        localSearchVolume: 2100,
+        location: location,
+        contentStrategy: {
+          contentType: 'product_page',
+          contentLength: '800-1200 words',
+          targetAudience: 'Convenience-seeking customers wanting food delivery',
+          contentFormat: 'Delivery service page with menu, ordering process, delivery areas, and time estimates',
+          callToAction: 'Order for Delivery Now'
+        },
+        impressions: 14000 
+      }
     ];
   }
   

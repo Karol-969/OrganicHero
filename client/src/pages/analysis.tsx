@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Bot, Target, CheckCircle, Users, BarChart3, Zap, Star, TrendingDown, ArrowRight, Activity, Sparkles, Rocket, ExternalLink, Shield, Globe, Search, FileText, Smartphone, Clock, Award, AlertTriangle, Info, TrendingUp, Download, Eye, ChevronDown, ChevronUp, Settings, Monitor, MessageSquare, Key, Layout, Palette, RotateCcw, Building2, PieChart } from 'lucide-react';
+import { ArrowLeft, Bot, Target, CheckCircle, Users, BarChart3, Zap, Star, TrendingDown, ArrowRight, Activity, Sparkles, Rocket, ExternalLink, Shield, Globe, Search, FileText, Smartphone, Clock, Award, AlertTriangle, Info, TrendingUp, Download, Eye, ChevronDown, ChevronUp, Settings, Monitor, MessageSquare, Key, Layout, Palette, RotateCcw, Building2, PieChart, MapPin } from 'lucide-react';
 import type { SEOAnalysisResult, ComprehensiveAnalysis } from '@shared/schema';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, PieChart as RechartsPieChart, Pie, Cell } from 'recharts';
 
@@ -187,6 +187,64 @@ export default function AnalysisPage() {
     toast({
       title: "Agent Data Downloaded! 📊",
       description: `${agentType.replace('_', ' ')} agent analysis data has been downloaded.`,
+    });
+  };
+
+  const downloadKeywordData = () => {
+    if (!basicResults?.keywords) return;
+    
+    // Prepare CSV content with enhanced keyword data
+    const csvHeaders = [
+      'Keyword',
+      'Search Volume',
+      'Local Search Volume',
+      'Difficulty',
+      'Competition Score',
+      'CPC ($)',
+      'Intent',
+      'Trend',
+      'Location',
+      'Content Type',
+      'Content Length',
+      'Target Audience',
+      'Content Format',
+      'Call to Action'
+    ];
+    
+    const csvRows = basicResults.keywords.map(keyword => [
+      keyword.keyword,
+      keyword.volume,
+      keyword.localSearchVolume || '',
+      keyword.difficulty,
+      keyword.competition || '',
+      keyword.cpc?.toFixed(2) || '',
+      keyword.intent || '',
+      keyword.trend || '',
+      keyword.location || '',
+      keyword.contentStrategy?.contentType?.replace('_', ' ') || '',
+      keyword.contentStrategy?.contentLength || '',
+      keyword.contentStrategy?.targetAudience || '',
+      keyword.contentStrategy?.contentFormat || '',
+      keyword.contentStrategy?.callToAction || ''
+    ]);
+    
+    const csvContent = [csvHeaders, ...csvRows]
+      .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+      .join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `keyword-analysis-${formatDomain(analysisUrl)}-${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Keywords Downloaded! 📊",
+      description: `${basicResults.keywords.length} keywords with content strategy exported to CSV.`,
     });
   };
 
@@ -740,53 +798,194 @@ export default function AnalysisPage() {
                         </Card>
                       )}
 
-                      {/* Keyword Analysis */}
+                      {/* Enhanced Keyword Analysis */}
                       {basicResults?.keywords && (
-                        <Card>
+                        <Card className="bg-gradient-to-br from-indigo-50 to-purple-100 dark:from-indigo-950/20 dark:to-purple-900/20 border-indigo-200 dark:border-indigo-800">
                           <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                              <Key className="w-5 h-5 text-indigo-600" />
-                              Keyword Analysis
+                            <CardTitle className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Key className="w-5 h-5 text-indigo-600" />
+                                Keyword Analysis
+                              </div>
+                              <Button
+                                onClick={() => downloadKeywordData()}
+                                variant="outline"
+                                size="sm"
+                                className="bg-white/70 hover:bg-white/90"
+                                data-testid="button-download-keywords"
+                              >
+                                <Download className="w-4 h-4 mr-2" />
+                                Download Keywords
+                              </Button>
                             </CardTitle>
-                            <CardDescription>Your current keyword performance and opportunities</CardDescription>
+                            <CardDescription>Location-based keyword research with content strategy guidance</CardDescription>
                           </CardHeader>
                           <CardContent>
-                            <div className="space-y-4">
-                              <div className="grid md:grid-cols-3 gap-4 text-center">
-                                <div className="p-4 bg-indigo-50 dark:bg-indigo-950/20 rounded-lg border border-indigo-200 dark:border-indigo-800">
+                            <div className="space-y-6">
+                              {/* Keyword Statistics */}
+                              <div className="grid md:grid-cols-4 gap-4 text-center">
+                                <div className="p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-indigo-200 dark:border-indigo-800">
                                   <div className="text-2xl font-bold text-indigo-600">{basicResults.keywords.length}</div>
                                   <div className="text-sm text-muted-foreground">Total Keywords</div>
                                 </div>
-                                <div className="p-4 bg-green-50 dark:bg-green-950/20 rounded-lg border border-green-200 dark:border-green-800">
+                                <div className="p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-green-200 dark:border-green-800">
                                   <div className="text-2xl font-bold text-green-600">
                                     {basicResults.keywords.filter(k => k.difficulty === 'low').length}
                                   </div>
                                   <div className="text-sm text-muted-foreground">Low Competition</div>
                                 </div>
-                                <div className="p-4 bg-yellow-50 dark:bg-yellow-950/20 rounded-lg border border-yellow-200 dark:border-yellow-800">
+                                <div className="p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-yellow-200 dark:border-yellow-800">
                                   <div className="text-2xl font-bold text-yellow-600">
                                     {Math.round(basicResults.keywords.reduce((sum, k) => sum + k.volume, 0) / basicResults.keywords.length)}
                                   </div>
                                   <div className="text-sm text-muted-foreground">Avg Monthly Searches</div>
                                 </div>
+                                <div className="p-4 bg-white/50 dark:bg-gray-800/50 rounded-lg border border-purple-200 dark:border-purple-800">
+                                  <div className="text-2xl font-bold text-purple-600">
+                                    {basicResults.keywords.reduce((sum, k) => sum + (k.localSearchVolume || k.volume * 0.3), 0).toFixed(0)}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">Local Search Volume</div>
+                                </div>
                               </div>
-                              
+
+                              {/* Interactive Keyword List */}
                               <div>
-                                <h5 className="font-medium mb-3">Top Keywords</h5>
-                                <div className="space-y-2">
-                                  {basicResults.keywords.slice(0, 5).map((keyword, index) => (
-                                    <div key={index} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
-                                      <span className="font-medium">{keyword.keyword}</span>
-                                      <div className="flex items-center gap-2">
-                                        <Badge variant="outline">{keyword.volume} searches</Badge>
-                                        <Badge variant={keyword.difficulty === 'low' ? 'default' : keyword.difficulty === 'medium' ? 'secondary' : 'destructive'}>
-                                          {keyword.difficulty}
-                                        </Badge>
+                                <div className="flex items-center justify-between mb-4">
+                                  <h5 className="font-semibold text-lg">Keyword Opportunities by Location</h5>
+                                  <Badge variant="secondary" className="bg-indigo-100 text-indigo-700">
+                                    {basicResults.businessIntelligence?.location || 'Location Analysis'}
+                                  </Badge>
+                                </div>
+                                
+                                <div className="space-y-3">
+                                  {basicResults.keywords.slice(0, 8).map((keyword, index) => (
+                                    <div key={index} className="bg-white/70 dark:bg-gray-800/70 p-4 rounded-lg border border-indigo-100 dark:border-indigo-900 hover:shadow-md transition-shadow">
+                                      <div className="flex items-start justify-between mb-3">
+                                        <div className="flex-1">
+                                          <h6 className="font-semibold text-lg text-indigo-900 dark:text-indigo-100">{keyword.keyword}</h6>
+                                          {keyword.location && (
+                                            <p className="text-sm text-muted-foreground flex items-center gap-1 mt-1">
+                                              <MapPin className="w-3 h-3" />
+                                              Targeting: {keyword.location}
+                                            </p>
+                                          )}
+                                        </div>
+                                        <div className="flex gap-2">
+                                          <Badge variant={keyword.difficulty === 'low' ? 'default' : keyword.difficulty === 'medium' ? 'secondary' : 'destructive'}>
+                                            {keyword.difficulty}
+                                          </Badge>
+                                          {keyword.intent && (
+                                            <Badge variant="outline" className={
+                                              keyword.intent === 'commercial' ? 'border-green-300 text-green-600' :
+                                              keyword.intent === 'transactional' ? 'border-purple-300 text-purple-600' :
+                                              keyword.intent === 'informational' ? 'border-blue-300 text-blue-600' :
+                                              'border-orange-300 text-orange-600'
+                                            }>
+                                              {keyword.intent}
+                                            </Badge>
+                                          )}
+                                        </div>
                                       </div>
+                                      
+                                      <div className="grid md:grid-cols-4 gap-4 text-sm mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">Volume:</span>
+                                          <span className="text-blue-600 font-semibold">{keyword.volume.toLocaleString()}/mo</span>
+                                        </div>
+                                        {keyword.localSearchVolume && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium">Local:</span>
+                                            <span className="text-green-600 font-semibold">{keyword.localSearchVolume.toLocaleString()}/mo</span>
+                                          </div>
+                                        )}
+                                        {keyword.competition && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium">Competition:</span>
+                                            <span className={keyword.competition < 40 ? 'text-green-600' : keyword.competition < 70 ? 'text-yellow-600' : 'text-red-600'}>
+                                              {keyword.competition}/100
+                                            </span>
+                                          </div>
+                                        )}
+                                        {keyword.cpc && (
+                                          <div className="flex items-center gap-2">
+                                            <span className="font-medium">CPC:</span>
+                                            <span className="text-purple-600">${keyword.cpc.toFixed(2)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Content Strategy Guidance */}
+                                      {keyword.contentStrategy && (
+                                        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 p-3 rounded-lg border border-blue-200 dark:border-blue-800">
+                                          <h6 className="font-medium text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
+                                            <FileText className="w-4 h-4" />
+                                            Content Strategy for Ranking Enhancement
+                                          </h6>
+                                          <div className="grid md:grid-cols-2 gap-3 text-sm">
+                                            <div>
+                                              <p><span className="font-medium">Content Type:</span> {keyword.contentStrategy.contentType.replace('_', ' ')}</p>
+                                              <p><span className="font-medium">Length:</span> {keyword.contentStrategy.contentLength}</p>
+                                            </div>
+                                            <div>
+                                              <p><span className="font-medium">Target Audience:</span> {keyword.contentStrategy.targetAudience}</p>
+                                              <p><span className="font-medium">Call to Action:</span> {keyword.contentStrategy.callToAction}</p>
+                                            </div>
+                                          </div>
+                                          <div className="mt-2">
+                                            <p className="text-sm"><span className="font-medium">Content Format:</span> {keyword.contentStrategy.contentFormat}</p>
+                                          </div>
+                                        </div>
+                                      )}
                                     </div>
                                   ))}
                                 </div>
                               </div>
+
+                              {/* Content Strategy Summary */}
+                              <Card className="bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border-green-200 dark:border-green-800">
+                                <CardHeader>
+                                  <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                                    <Sparkles className="w-5 h-5" />
+                                    Content Strategy Recommendations
+                                  </CardTitle>
+                                </CardHeader>
+                                <CardContent>
+                                  <div className="grid md:grid-cols-3 gap-4">
+                                    <div>
+                                      <h6 className="font-medium mb-2">High-Priority Content</h6>
+                                      <ul className="text-sm space-y-1">
+                                        {basicResults.keywords.filter(k => k.difficulty === 'low' && k.volume > 500).slice(0, 3).map((k, i) => (
+                                          <li key={i} className="flex items-center gap-2">
+                                            <CheckCircle className="w-3 h-3 text-green-500" />
+                                            {k.contentStrategy?.contentType.replace('_', ' ')} for "{k.keyword}"
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                    <div>
+                                      <h6 className="font-medium mb-2">Local SEO Focus</h6>
+                                      <ul className="text-sm space-y-1">
+                                        {basicResults.keywords.filter(k => k.localSearchVolume && k.localSearchVolume > 300).slice(0, 3).map((k, i) => (
+                                          <li key={i} className="flex items-center gap-2">
+                                            <MapPin className="w-3 h-3 text-blue-500" />
+                                            Target "{k.keyword}" for {k.location}
+                                          </li>
+                                        ))}
+                                      </ul>
+                                    </div>
+                                    <div>
+                                      <h6 className="font-medium mb-2">Content Types Needed</h6>
+                                      <div className="flex flex-wrap gap-1">
+                                        {[...new Set(basicResults.keywords.filter(k => k.contentStrategy).map(k => k.contentStrategy!.contentType))].slice(0, 4).map((type, i) => (
+                                          <Badge key={i} variant="secondary" className="text-xs">
+                                            {type.replace('_', ' ')}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </CardContent>
+                              </Card>
                             </div>
                           </CardContent>
                         </Card>
