@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "#analysis", label: "Try It Free" },
+  { href: "/campaigns", label: "Campaigns", isRoute: true },
   { href: "#vision", label: "Vision" },
   { href: "#how-it-works", label: "How It Works" },
   { href: "#operations", label: "Core Operations" },
@@ -19,20 +20,27 @@ export default function Header() {
   const [, setLocation] = useLocation();
   const activeSection = useScrollSpy(navItems.map(item => item.href.substring(1)));
 
-  const scrollToSection = (href: string) => {
-    const targetId = href.substring(1);
-    const targetElement = document.getElementById(targetId);
-    
-    if (targetElement) {
-      const headerHeight = 80;
-      const targetPosition = targetElement.offsetTop - headerHeight;
-      
-      window.scrollTo({
-        top: targetPosition,
-        behavior: 'smooth'
-      });
-      
+  const handleNavigation = (item: { href: string; label: string; isRoute?: boolean }) => {
+    if (item.isRoute) {
+      // Navigate to route
+      setLocation(item.href);
       setMobileMenuOpen(false);
+    } else {
+      // Scroll to section
+      const targetId = item.href.substring(1);
+      const targetElement = document.getElementById(targetId);
+      
+      if (targetElement) {
+        const headerHeight = 80;
+        const targetPosition = targetElement.offsetTop - headerHeight;
+        
+        window.scrollTo({
+          top: targetPosition,
+          behavior: 'smooth'
+        });
+        
+        setMobileMenuOpen(false);
+      }
     }
   };
 
@@ -54,11 +62,11 @@ export default function Header() {
               {navItems.map((item) => (
                 <button
                   key={item.href}
-                  onClick={() => scrollToSection(item.href)}
+                  onClick={() => handleNavigation(item)}
                   className={`nav-link hover:text-primary transition-colors ${
-                    activeSection === item.href.substring(1) ? 'active' : ''
+                    !item.isRoute && activeSection === item.href.substring(1) ? 'active' : ''
                   }`}
-                  data-testid={`nav-${item.href.substring(1)}`}
+                  data-testid={`nav-${item.href.substring(1).replace('/', '')}`}
                 >
                   {item.label}
                 </button>
@@ -90,11 +98,11 @@ export default function Header() {
           {navItems.map((item) => (
             <button
               key={item.href}
-              onClick={() => scrollToSection(item.href)}
+              onClick={() => handleNavigation(item)}
               className={`block w-full text-left py-2 nav-link hover:text-primary transition-colors ${
-                activeSection === item.href.substring(1) ? 'active' : ''
+                !item.isRoute && activeSection === item.href.substring(1) ? 'active' : ''
               }`}
-              data-testid={`mobile-nav-${item.href.substring(1)}`}
+              data-testid={`mobile-nav-${item.href.substring(1).replace('/', '')}`}
             >
               {item.label}
             </button>

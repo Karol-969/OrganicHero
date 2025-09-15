@@ -7,6 +7,7 @@ import Home from "@/pages/home";
 import Analysis from "@/pages/analysis";
 import Pricing from "@/pages/pricing";
 import Subscribe from "@/pages/subscribe";
+import Campaigns from "@/pages/campaigns";
 import NotFound from "@/pages/not-found";
 
 function Router() {
@@ -14,6 +15,7 @@ function Router() {
     <Switch>
       <Route path="/" component={Home} />
       <Route path="/analysis/:analysisId" component={Analysis} />
+      <Route path="/campaigns" component={Campaigns} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/subscribe" component={Subscribe} />
       <Route component={NotFound} />
