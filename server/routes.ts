@@ -846,30 +846,80 @@ function extractLocation(content: string): string {
 }
 
 function extractProducts(content: string): string[] {
-  const productKeywords = [
+  const contentLower = content.toLowerCase();
+  const products: string[] = [];
+  
+  // Enhanced food and menu item extraction for restaurants
+  const foodItems = [
+    // Nepalese/Tibetan foods (commonly served at fusion restaurants)
+    'momo', 'momos', 'dumpling', 'dumplings', 'thukpa', 'chowmein', 'chow mein', 'dal bhat', 'dal', 'bhat',
+    'curry', 'naan', 'roti', 'samosa', 'samosas', 'chili chicken', 'butter chicken', 'tandoori', 'biryani',
+    'fried rice', 'spring rolls', 'spring roll', 'sekuwa', 'choila', 'chatamari', 'yomari', 'sel roti',
+    // Common Asian fusion items
+    'pad thai', 'tom yum', 'pho', 'ramen', 'sushi', 'tempura', 'teriyaki', 'satay', 'laksa', 'dim sum',
+    // Common restaurant items
+    'pizza', 'burger', 'sandwich', 'pasta', 'salad', 'soup', 'appetizer', 'entree', 'dessert', 'starter',
+    'chicken', 'beef', 'pork', 'lamb', 'fish', 'seafood', 'vegetarian', 'vegan', 'steak', 'wings',
+    'coffee', 'tea', 'juice', 'smoothie', 'beer', 'wine', 'cocktail', 'drinks', 'mocktail', 'lassi',
+    // General products
     'product', 'item', 'goods', 'merchandise', 'solution', 'offering', 'package',
     'software', 'app', 'tool', 'platform', 'system', 'device', 'equipment'
   ];
   
-  const products: string[] = [];
+  // Look for menu items and food products with higher priority for food terms
+  for (const item of foodItems) {
+    const regex = new RegExp(`\\b${item}s?\\b`, 'gi');
+    const matches = content.match(regex);
+    if (matches && matches.length > 0) {
+      products.push(item);
+    }
+  }
   
-  // Look for patterns like "our products include", "we offer", etc.
+  // Enhanced patterns for product extraction with focus on food/menu items
   const productPatterns = [
-    /(?:products?|offerings?|solutions?|services?)\s+(?:include|are|:)\s*([^.!?]*)/gi,
-    /(?:we|our company)\s+(?:offer|provide|sell|make|create)\s+([^.!?]*)/gi
+    // Restaurant/food specific patterns
+    /(?:menu|dishes?|meals?|food|cuisine|specialties|favorites)\s+(?:includes?|features?|offers?|has|:)\s*([^.!?]*)/gi,
+    /(?:we\s+serve|serving|specializing\s+in|famous\s+for|known\s+for)\s+([^.!?]*)/gi,
+    /(?:try\s+our|taste\s+our|enjoy\s+our|order\s+our|fresh|authentic|delicious|homemade)\s+([a-zA-Z\s]{3,30})/gi,
+    /(?:signature|popular|best|special)\s+([a-zA-Z\s]{3,30})(?:\s+(?:dish|meal|item|plate))?/gi,
+    // General product patterns
+    /(?:products?|offerings?|solutions?|services?|items?)\s+(?:include|are|:)\s*([^.!?]*)/gi,
+    /(?:we|our\s+(?:company|restaurant|kitchen))\s+(?:offer|provide|sell|make|create|specialize)\s+([^.!?]*)/gi
   ];
   
   for (const pattern of productPatterns) {
     const matches = content.match(pattern);
     if (matches) {
       matches.forEach(match => {
-        const items = match.split(/,|and|\&/).map(item => item.trim()).filter(item => item.length > 3 && item.length < 50);
+        const cleanMatch = match.replace(/^[^a-zA-Z]+/, '').trim();
+        const items = cleanMatch.split(/,|and|\&|\/|\||\+/).map(item => 
+          item.trim().replace(/[^a-zA-Z\s]/g, '').trim()
+        ).filter(item => item.length > 2 && item.length < 40 && !['our', 'the', 'we', 'you', 'and', 'or'].includes(item.toLowerCase()));
         products.push(...items);
       });
     }
   }
   
-  return Array.from(new Set(products)).slice(0, 5); // Remove duplicates, limit to 5
+  // Look for specific menu sections and food categories
+  const menuCategories = [
+    'appetizer', 'appetizers', 'starter', 'starters', 'main', 'mains', 'entree', 'entrees', 
+    'dessert', 'desserts', 'drink', 'drinks', 'beverage', 'beverages', 'special', 'specials',
+    'combo', 'combos', 'platter', 'platters', 'bowl', 'bowls', 'wrap', 'wraps', 'roll', 'rolls'
+  ];
+  
+  for (const category of menuCategories) {
+    if (contentLower.includes(category)) {
+      products.push(category);
+    }
+  }
+  
+  // Filter and clean results
+  const cleanProducts = Array.from(new Set(products))
+    .filter(p => p && p.trim().length > 1 && p.trim().length < 50)
+    .map(p => p.trim())
+    .slice(0, 20); // Increased limit for better product detection
+  
+  return cleanProducts;
 }
 
 function extractServices(content: string, businessType: string): string[] {
