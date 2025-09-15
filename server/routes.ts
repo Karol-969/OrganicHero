@@ -1,13 +1,23 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { seoAnalysisSchema, type SEOAnalysisResult, comprehensiveAnalysisSchema, type ComprehensiveAnalysis } from "@shared/schema";
+import { seoAnalysisSchema, type SEOAnalysisResult, comprehensiveAnalysisSchema, type ComprehensiveAnalysis, type User } from "@shared/schema";
 import { z } from "zod";
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
 import { MultiAgentCoordinator } from './agents';
 import { ActionPlanGenerator } from './action-plan-generator';
 import Stripe from 'stripe';
+import { secureAuthenticateAPI, requireSubscription, sendAuthError, type AuthenticatedRequest } from './secure-auth';
+import { registerAuthRoutes } from './auth-routes';
+
+// ⚠️  REMOVED VULNERABLE AUTHENTICATION MIDDLEWARE
+// The old authenticateUser middleware that accepted forgeable headers has been completely removed
+// and replaced with secure cryptographic authentication in secure-auth.ts
+
+// ⚠️  REMOVED DUPLICATE MIDDLEWARE - using secure version from secure-auth.ts
+
+// ⚠️  REMOVED DUPLICATE HELPER - using secure version from secure-auth.ts
 
 // Helper function to make fetch requests with timeout
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
@@ -1901,6 +1911,9 @@ function mapCompetitionToDifficulty(competitionLevel?: string): 'high' | 'medium
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // 🔐 Register secure authentication routes (login, register, API keys)
+  registerAuthRoutes(app);
+
   // SEO Analysis endpoint
   app.post('/api/analyze-seo', async (req, res) => {
     try {
@@ -2714,6 +2727,2220 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get usage stats error:', error);
       res.status(500).json({ 
         error: 'Error getting usage stats: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // CAMPAIGN MANAGEMENT API ROUTES
+  // =============================================================================
+
+  // Rate limiting for external platform API calls
+  const rateLimitCache = new Map<string, { count: number; resetTime: number }>();
+  const RATE_LIMIT_WINDOW = 60 * 1000; // 1 minute
+  const MAX_REQUESTS_PER_MINUTE = 60;
+
+  /**
+   * Rate limiting middleware for external platform calls
+   */
+  function rateLimitMiddleware(identifier: string): boolean {
+    const now = Date.now();
+    const key = identifier;
+    const current = rateLimitCache.get(key);
+
+    if (!current || now > current.resetTime) {
+      rateLimitCache.set(key, { count: 1, resetTime: now + RATE_LIMIT_WINDOW });
+      return true;
+    }
+
+    if (current.count >= MAX_REQUESTS_PER_MINUTE) {
+      return false;
+    }
+
+    current.count++;
+    return true;
+  }
+
+  /**
+   * Helper function to check user subscription tier and limits
+   */
+  async function checkSubscriptionLimits(userEmail: string, action: string): Promise<{ allowed: boolean; plan: string; message?: string }> {
+    try {
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return { allowed: false, plan: 'none', message: 'User not found' };
+      }
+
+      const plan = await storage.getSubscriptionPlanByName(user.subscriptionPlan || 'free');
+      if (!plan) {
+        return { allowed: false, plan: user.subscriptionPlan || 'free', message: 'Subscription plan not found' };
+      }
+
+      // Check specific limits based on action
+      if (action === 'create_campaign') {
+        // For now, allow campaigns based on subscription
+        const allowedPlans = ['basic', 'pro', 'enterprise'];
+        if (!allowedPlans.includes(user.subscriptionPlan || 'free')) {
+          return { allowed: false, plan: user.subscriptionPlan || 'free', message: 'Campaign creation requires paid subscription' };
+        }
+      }
+
+      return { allowed: true, plan: user.subscriptionPlan || 'free' };
+    } catch (error) {
+      console.error('Error checking subscription limits:', error);
+      return { allowed: false, plan: 'error', message: 'Error checking subscription' };
+    }
+  }
+
+  // =============================================================================
+  // PLATFORM CONNECTION MANAGEMENT ROUTES
+  // =============================================================================
+
+  /**
+   * Get all available advertising platforms
+   * GET /api/campaigns/platforms
+   */
+  app.get('/api/campaigns/platforms', async (req, res) => {
+    try {
+      const platforms = await storage.getPlatforms();
+      
+      res.json({
+        success: true,
+        data: platforms.map(platform => ({
+          id: platform.id,
+          name: platform.name,
+          displayName: platform.displayName,
+          isActive: platform.isActive,
+          supportsOAuth: platform.supportsOAuth,
+          iconUrl: platform.iconUrl,
+          documentationUrl: platform.documentationUrl
+        }))
+      });
+    } catch (error: any) {
+      console.error('Get platforms error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch platforms: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Get authenticated user's connected platforms
+   * GET /api/campaigns/me/platforms
+   */
+  app.get('/api/campaigns/me/platforms', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const credentials = await storage.getPlatformCredentials(user.id);
+      const platforms = await storage.getPlatforms();
+
+      const connectedPlatforms = credentials.map(cred => {
+        const platform = platforms.find(p => p.id === cred.platformId);
+        return {
+          id: cred.id,
+          platformId: cred.platformId,
+          platformName: platform?.name || 'Unknown',
+          platformDisplayName: platform?.displayName || 'Unknown',
+          accountId: cred.accountId,
+          accountName: cred.accountName,
+          isActive: cred.isActive,
+          lastSyncAt: cred.lastSyncAt,
+          permissions: cred.permissions,
+          createdAt: cred.createdAt
+        };
+      });
+
+      res.json({
+        success: true,
+        data: connectedPlatforms
+      });
+    } catch (error: any) {
+      console.error('Get connected platforms error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch connected platforms: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Disconnect a platform
+   * DELETE /api/campaigns/me/platforms/:credentialId
+   */
+  app.delete('/api/campaigns/me/platforms/:credentialId', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { credentialId } = req.params;
+      const user = req.user;
+
+      // Verify credential exists and belongs to authenticated user
+      const credential = await storage.getPlatformCredential(credentialId);
+      if (!credential) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Platform connection not found' 
+        });
+      }
+
+      if (credential.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this platform connection');
+      }
+
+      const success = await storage.deletePlatformCredential(credentialId);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Platform disconnected successfully'
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Platform connection not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Disconnect platform error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to disconnect platform: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Check platform connection status
+   * GET /api/campaigns/me/platforms/:credentialId/status
+   */
+  app.get('/api/campaigns/me/platforms/:credentialId/status', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { credentialId } = req.params;
+      const user = req.user;
+
+      const credential = await storage.getPlatformCredential(credentialId);
+      if (!credential) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Platform connection not found' 
+        });
+      }
+
+      if (credential.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this platform connection');
+      }
+
+      // Check token expiry
+      const isExpired = credential.tokenExpiresAt && new Date() > credential.tokenExpiresAt;
+      const needsRefresh = isExpired || (credential.tokenExpiresAt && (credential.tokenExpiresAt.getTime() - Date.now()) < (24 * 60 * 60 * 1000)); // Expires within 24 hours
+
+      res.json({
+        success: true,
+        data: {
+          isActive: credential.isActive,
+          isExpired,
+          needsRefresh,
+          lastSyncAt: credential.lastSyncAt,
+          tokenExpiresAt: credential.tokenExpiresAt,
+          permissions: credential.permissions
+        }
+      });
+    } catch (error: any) {
+      console.error('Check platform status error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to check platform status: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // OAUTH FLOW ROUTES
+  // =============================================================================
+
+  /**
+   * Initiate OAuth flow for a platform
+   * POST /api/campaigns/me/platforms/connect
+   */
+  app.post('/api/campaigns/me/platforms/connect', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const { platformName, redirectUri } = req.body;
+
+      if (!platformName) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Platform name is required' 
+        });
+      }
+
+      const platform = await storage.getPlatformByName(platformName);
+      if (!platform || !platform.isActive) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Platform not found or inactive' 
+        });
+      }
+
+      if (!platform.supportsOAuth) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Platform does not support OAuth' 
+        });
+      }
+
+      // Check subscription limits using authenticated user
+      const subscriptionCheck = await checkSubscriptionLimits(user.email!, 'connect_platform');
+      if (!subscriptionCheck.allowed) {
+        return sendAuthError(res, 'subscription', subscriptionCheck.message || 'Subscription limit reached');
+      }
+
+      // Generate OAuth URL based on platform
+      let authUrl = '';
+      const state = `${user.id}:${platform.id}:${Date.now()}`;
+
+      switch (platform.name) {
+        case 'google_ads':
+          authUrl = `https://accounts.google.com/oauth/authorize?client_id=YOUR_CLIENT_ID&redirect_uri=${encodeURIComponent(redirectUri || 'http://localhost:3000/auth/callback')}&scope=https://www.googleapis.com/auth/adwords&response_type=code&state=${state}`;
+          break;
+        case 'meta_ads':
+          authUrl = `https://www.facebook.com/v18.0/dialog/oauth?client_id=YOUR_CLIENT_ID&redirect_uri=${encodeURIComponent(redirectUri || 'http://localhost:3000/auth/callback')}&scope=ads_management,ads_read&response_type=code&state=${state}`;
+          break;
+        case 'tiktok_ads':
+          authUrl = `https://ads.tiktok.com/marketing_api/auth?app_id=YOUR_APP_ID&redirect_uri=${encodeURIComponent(redirectUri || 'http://localhost:3000/auth/callback')}&scope=adgroup_management,campaign_management&response_type=code&state=${state}`;
+          break;
+        default:
+          return res.status(400).json({ 
+            success: false,
+            error: 'OAuth not implemented for this platform' 
+          });
+      }
+
+      res.json({
+        success: true,
+        data: {
+          authUrl,
+          state,
+          platformName: platform.name,
+          platformDisplayName: platform.displayName
+        }
+      });
+    } catch (error: any) {
+      console.error('Initiate OAuth error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to initiate OAuth: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Complete OAuth flow and store credentials
+   * POST /api/campaigns/auth/callback
+   */
+  app.post('/api/campaigns/auth/callback', async (req, res) => {
+    try {
+      const { code, state, error: oauthError } = req.body;
+
+      if (oauthError) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'OAuth authorization failed: ' + oauthError 
+        });
+      }
+
+      if (!code || !state) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Authorization code and state are required' 
+        });
+      }
+
+      // Parse state to get user and platform info
+      const [userId, platformId, timestamp] = state.split(':');
+      
+      if (!userId || !platformId) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Invalid state parameter' 
+        });
+      }
+
+      const user = await storage.getUser(userId);
+      const platform = await storage.getPlatform(platformId);
+
+      if (!user || !platform) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User or platform not found' 
+        });
+      }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`oauth_${user.id}_${platform.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      // Exchange code for access token (demo implementation)
+      // In production, this would make actual API calls to the platform
+      const mockTokenResponse = {
+        access_token: `demo_access_token_${platform.name}_${Date.now()}`,
+        refresh_token: `demo_refresh_token_${platform.name}_${Date.now()}`,
+        expires_in: 3600,
+        account_id: `demo_account_${Math.random().toString(36).substr(2, 9)}`,
+        account_name: `Demo ${platform.displayName} Account`
+      };
+
+      // Store credentials (in demo mode, we store demo tokens)
+      const credential = await storage.createPlatformCredential({
+        userId: user.id,
+        platformId: platform.id,
+        accountId: mockTokenResponse.account_id,
+        accountName: mockTokenResponse.account_name,
+        accessTokenEncrypted: mockTokenResponse.access_token, // In production, encrypt this
+        refreshTokenEncrypted: mockTokenResponse.refresh_token, // In production, encrypt this
+        encryptionKeyId: 'demo_key_id',
+        tokenExpiresAt: new Date(Date.now() + mockTokenResponse.expires_in * 1000),
+        permissions: ['campaign_management', 'read_insights'],
+        metadata: { 
+          demo_mode: true,
+          connected_at: new Date().toISOString(),
+          platform_version: platform.apiVersion 
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          credentialId: credential.id,
+          accountId: credential.accountId,
+          accountName: credential.accountName,
+          platformName: platform.name,
+          platformDisplayName: platform.displayName,
+          permissions: credential.permissions,
+          demo_mode: true
+        }
+      });
+    } catch (error: any) {
+      console.error('OAuth callback error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to complete OAuth: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // CAMPAIGN GROUP ROUTES
+  // =============================================================================
+
+  /**
+   * Get all campaign groups for the authenticated user
+   * GET /api/campaigns/me/groups
+   */
+  app.get('/api/campaigns/me/groups', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const groups = await storage.getCampaignGroups(user.id);
+
+      res.json({
+        success: true,
+        data: groups
+      });
+    } catch (error: any) {
+      console.error('Get campaign groups error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch campaign groups: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create a new campaign group
+   * POST /api/campaigns/me/groups
+   */
+  app.post('/api/campaigns/me/groups', secureAuthenticateAPI, requireSubscription('basic'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const { name, description, budget, tags } = req.body;
+
+      if (!name) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Group name is required' 
+        });
+      }
+
+      // Check subscription limits using authenticated user
+      const subscriptionCheck = await checkSubscriptionLimits(user.email!, 'create_campaign_group');
+      if (!subscriptionCheck.allowed) {
+        return sendAuthError(res, 'subscription', subscriptionCheck.message || 'Subscription limit reached');
+      }
+
+      const group = await storage.createCampaignGroup({
+        userId: user.id,
+        name,
+        description,
+        budget,
+        tags: tags || [],
+        metadata: { 
+          created_via: 'api',
+          demo_mode: true 
+        }
+      });
+
+      res.status(201).json({
+        success: true,
+        data: group
+      });
+    } catch (error: any) {
+      console.error('Create campaign group error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to create campaign group: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Update a campaign group
+   * PUT /api/campaigns/me/groups/:groupId
+   */
+  app.put('/api/campaigns/me/groups/:groupId', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { groupId } = req.params;
+      const user = req.user;
+      const { name, description, budget, tags, status } = req.body;
+
+      // Verify group belongs to authenticated user
+      const existingGroup = await storage.getCampaignGroup(groupId);
+      if (!existingGroup) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Campaign group not found' 
+        });
+      }
+
+      if (existingGroup.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this campaign group');
+      }
+
+      const updates: any = {};
+      if (name !== undefined) updates.name = name;
+      if (description !== undefined) updates.description = description;
+      if (budget !== undefined) updates.budget = budget;
+      if (tags !== undefined) updates.tags = tags;
+      if (status !== undefined) updates.status = status;
+      updates.updatedAt = new Date();
+
+      const updatedGroup = await storage.updateCampaignGroup(groupId, updates);
+
+      if (updatedGroup) {
+        res.json({
+          success: true,
+          data: updatedGroup
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Campaign group not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Update campaign group error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to update campaign group: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Delete a campaign group
+   * DELETE /api/campaigns/me/groups/:groupId
+   */
+  app.delete('/api/campaigns/me/groups/:groupId', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { groupId } = req.params;
+      const user = req.user;
+
+      // Verify group exists and belongs to authenticated user
+      const group = await storage.getCampaignGroup(groupId);
+      if (!group) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Campaign group not found' 
+        });
+      }
+
+      if (group.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this campaign group');
+      }
+
+      const success = await storage.deleteCampaignGroup(groupId);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Campaign group deleted successfully'
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Campaign group not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Delete campaign group error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to delete campaign group: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // CAMPAIGN CRUD ROUTES
+  // =============================================================================
+
+  /**
+   * Get all campaigns for a user
+   * GET /api/campaigns/:userEmail
+   */
+  app.get('/api/campaigns/:userEmail', async (req, res) => {
+    try {
+      const { userEmail } = req.params;
+      const { groupId, status, platformCredentialId } = req.query;
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      let campaigns;
+      if (groupId) {
+        campaigns = await storage.getCampaignsByGroup(groupId as string);
+      } else if (platformCredentialId) {
+        campaigns = await storage.getCampaignsByPlatform(platformCredentialId as string);
+      } else {
+        campaigns = await storage.getCampaigns(user.id);
+      }
+
+      // Filter by status if provided
+      if (status) {
+        campaigns = campaigns.filter(campaign => campaign.status === status);
+      }
+
+      // Filter to ensure user owns all campaigns
+      campaigns = campaigns.filter(campaign => campaign.userId === user.id);
+
+      res.json({
+        success: true,
+        data: campaigns
+      });
+    } catch (error: any) {
+      console.error('Get campaigns error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch campaigns: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Get a specific campaign
+   * GET /api/campaigns/details/:campaignId
+   */
+  app.get('/api/campaigns/details/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      res.json({
+        success: true,
+        data: campaign
+      });
+    } catch (error: any) {
+      console.error('Get campaign details error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch campaign details: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create a new campaign
+   * POST /api/campaigns
+   */
+  app.post('/api/campaigns', async (req, res) => {
+    try {
+      const campaignData = req.body;
+
+      if (!campaignData.userEmail || !campaignData.name || !campaignData.platformCredentialId) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email, campaign name, and platform credential ID are required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(campaignData.userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Check subscription limits
+      const subscriptionCheck = await checkSubscriptionLimits(campaignData.userEmail, 'create_campaign');
+      if (!subscriptionCheck.allowed) {
+        return res.status(403).json({ 
+          success: false,
+          error: subscriptionCheck.message || 'Subscription limit reached' 
+        });
+      }
+
+      // Verify platform credential belongs to user
+      const credential = await storage.getPlatformCredential(campaignData.platformCredentialId);
+      if (!credential || credential.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Invalid platform credential' 
+        });
+      }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`create_campaign_${user.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      const campaign = await storage.createCampaign({
+        userId: user.id,
+        groupId: campaignData.groupId || null,
+        platformCredentialId: campaignData.platformCredentialId,
+        externalCampaignId: `demo_campaign_${Date.now()}`, // Demo mode
+        name: campaignData.name,
+        description: campaignData.description,
+        objective: campaignData.objective,
+        budgetType: campaignData.budgetType,
+        budgetAmountCents: campaignData.budgetAmountCents,
+        bidStrategy: campaignData.bidStrategy,
+        bidAmountCents: campaignData.bidAmountCents,
+        startDate: campaignData.startDate ? new Date(campaignData.startDate) : null,
+        endDate: campaignData.endDate ? new Date(campaignData.endDate) : null,
+        timezone: campaignData.timezone || 'UTC',
+        targetingCriteria: campaignData.targetingCriteria || {},
+        conversionGoals: campaignData.conversionGoals || {},
+        platformSettings: { ...campaignData.platformSettings, demo_mode: true },
+        optimizationRules: campaignData.optimizationRules || {},
+        tags: campaignData.tags || [],
+        isTemplate: campaignData.isTemplate || false,
+        templateName: campaignData.templateName,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: campaign
+      });
+    } catch (error: any) {
+      console.error('Create campaign error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to create campaign: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Update a campaign
+   * PUT /api/campaigns/:campaignId
+   */
+  app.put('/api/campaigns/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const campaignData = req.body;
+
+      if (!campaignData.userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(campaignData.userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const existingCampaign = await storage.getCampaign(campaignId);
+      if (!existingCampaign || existingCampaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`update_campaign_${user.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      const updates: any = { updatedAt: new Date() };
+      
+      // Only update provided fields
+      const allowedFields = ['name', 'description', 'status', 'budgetAmountCents', 'bidAmountCents', 
+                            'startDate', 'endDate', 'targetingCriteria', 'conversionGoals', 
+                            'platformSettings', 'optimizationRules', 'tags'];
+      
+      allowedFields.forEach(field => {
+        if (campaignData[field] !== undefined) {
+          if (field === 'startDate' || field === 'endDate') {
+            updates[field] = campaignData[field] ? new Date(campaignData[field]) : null;
+          } else {
+            updates[field] = campaignData[field];
+          }
+        }
+      });
+
+      const updatedCampaign = await storage.updateCampaign(campaignId, updates);
+
+      if (updatedCampaign) {
+        res.json({
+          success: true,
+          data: updatedCampaign
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Campaign not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Update campaign error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to update campaign: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Delete a campaign
+   * DELETE /api/campaigns/:campaignId
+   */
+  app.delete('/api/campaigns/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      const success = await storage.deleteCampaign(campaignId);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Campaign deleted successfully'
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Campaign not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Delete campaign error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to delete campaign: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // AD GROUP ROUTES
+  // =============================================================================
+
+  /**
+   * Get all ad groups for a campaign
+   * GET /api/campaigns/adgroups/campaign/:campaignId
+   */
+  app.get('/api/campaigns/adgroups/campaign/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      const adGroups = await storage.getAdGroupsByCampaign(campaignId);
+
+      res.json({
+        success: true,
+        data: adGroups
+      });
+    } catch (error: any) {
+      console.error('Get ad groups error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch ad groups: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create a new ad group
+   * POST /api/campaigns/adgroups
+   */
+  app.post('/api/campaigns/adgroups', async (req, res) => {
+    try {
+      const adGroupData = req.body;
+
+      if (!adGroupData.userEmail || !adGroupData.campaignId || !adGroupData.name) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email, campaign ID, and ad group name are required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(adGroupData.userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(adGroupData.campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Invalid campaign' 
+        });
+      }
+
+      const adGroup = await storage.createAdGroup({
+        campaignId: adGroupData.campaignId,
+        externalAdGroupId: `demo_adgroup_${Date.now()}`, // Demo mode
+        name: adGroupData.name,
+        status: adGroupData.status || 'active',
+        bidStrategy: adGroupData.bidStrategy || 'inherit',
+        bidAmountCents: adGroupData.bidAmountCents,
+        audienceId: adGroupData.audienceId || null,
+        targetingCriteria: adGroupData.targetingCriteria || {},
+        optimizationRules: adGroupData.optimizationRules || {}
+      });
+
+      res.status(201).json({
+        success: true,
+        data: adGroup
+      });
+    } catch (error: any) {
+      console.error('Create ad group error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to create ad group: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Update an ad group
+   * PUT /api/campaigns/adgroups/:adGroupId
+   */
+  app.put('/api/campaigns/adgroups/:adGroupId', async (req, res) => {
+    try {
+      const { adGroupId } = req.params;
+      const adGroupData = req.body;
+
+      if (!adGroupData.userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(adGroupData.userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify ad group belongs to user (through campaign)
+      const existingAdGroup = await storage.getAdGroup(adGroupId);
+      if (!existingAdGroup) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Ad group not found' 
+        });
+      }
+
+      const campaign = await storage.getCampaign(existingAdGroup.campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      const updates: any = { updatedAt: new Date() };
+      
+      const allowedFields = ['name', 'status', 'bidStrategy', 'bidAmountCents', 
+                            'audienceId', 'targetingCriteria', 'optimizationRules'];
+      
+      allowedFields.forEach(field => {
+        if (adGroupData[field] !== undefined) {
+          updates[field] = adGroupData[field];
+        }
+      });
+
+      const updatedAdGroup = await storage.updateAdGroup(adGroupId, updates);
+
+      if (updatedAdGroup) {
+        res.json({
+          success: true,
+          data: updatedAdGroup
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Ad group not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Update ad group error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to update ad group: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Delete an ad group
+   * DELETE /api/campaigns/adgroups/:adGroupId
+   */
+  app.delete('/api/campaigns/adgroups/:adGroupId', async (req, res) => {
+    try {
+      const { adGroupId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify ad group belongs to user (through campaign)
+      const adGroup = await storage.getAdGroup(adGroupId);
+      if (!adGroup) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Ad group not found' 
+        });
+      }
+
+      const campaign = await storage.getCampaign(adGroup.campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      const success = await storage.deleteAdGroup(adGroupId);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Ad group deleted successfully'
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Ad group not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Delete ad group error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to delete ad group: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // AUDIENCE MANAGEMENT ROUTES
+  // =============================================================================
+
+  /**
+   * Get all audiences for authenticated user
+   * GET /api/campaigns/me/audiences
+   */
+  app.get('/api/campaigns/me/audiences', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const { type, status } = req.query;
+
+      let audiences;
+      if (type) {
+        audiences = await storage.getAudiencesByType(user.id, type as string);
+      } else {
+        audiences = await storage.getAudiences(user.id);
+      }
+
+      // Filter by status if provided
+      if (status) {
+        audiences = audiences.filter(audience => audience.status === status);
+      }
+
+      res.json({
+        success: true,
+        data: audiences
+      });
+    } catch (error: any) {
+      console.error('Get audiences error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch audiences: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create a new audience
+   * POST /api/campaigns/me/audiences
+   */
+  app.post('/api/campaigns/me/audiences', secureAuthenticateAPI, requireSubscription('basic'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const audienceData = req.body;
+
+      if (!audienceData.name || !audienceData.type) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Audience name and type are required' 
+        });
+      }
+
+      // Check subscription limits using authenticated user
+      const subscriptionCheck = await checkSubscriptionLimits(user.email!, 'create_audience');
+      if (!subscriptionCheck.allowed) {
+        return sendAuthError(res, 'subscription', subscriptionCheck.message || 'Subscription limit reached');
+      }
+
+      const audience = await storage.createAudience({
+        userId: user.id,
+        name: audienceData.name,
+        description: audienceData.description,
+        type: audienceData.type,
+        sourceType: audienceData.sourceType || 'upload',
+        size: audienceData.size,
+        status: 'processing',
+        platformSpecific: audienceData.platformSpecific || {},
+        targetingCriteria: audienceData.targetingCriteria || {},
+        uploadedDataHash: audienceData.uploadedDataHash,
+        privacyLevel: audienceData.privacyLevel || 'confidential',
+        refreshFrequency: audienceData.refreshFrequency || 'manual',
+        expiresAt: audienceData.expiresAt ? new Date(audienceData.expiresAt) : null
+      });
+
+      res.status(201).json({
+        success: true,
+        data: audience
+      });
+    } catch (error: any) {
+      console.error('Create audience error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to create audience: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Upload customer data for audience creation
+   * POST /api/campaigns/me/audiences/:audienceId/upload
+   */
+  app.post('/api/campaigns/me/audiences/:audienceId/upload', secureAuthenticateAPI, requireSubscription('basic'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const { audienceId } = req.params;
+      const user = req.user;
+      const { customerData, dataType } = req.body;
+
+      if (!audienceId || !customerData) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Audience ID and customer data are required' 
+        });
+      }
+
+      // Verify audience exists and belongs to authenticated user
+      const audience = await storage.getAudience(audienceId);
+      if (!audience) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Audience not found' 
+        });
+      }
+
+      if (audience.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this audience');
+      }
+
+      // Check subscription limits using authenticated user
+      const subscriptionCheck = await checkSubscriptionLimits(user.email!, 'upload_customer_data');
+      if (!subscriptionCheck.allowed) {
+        return sendAuthError(res, 'subscription', subscriptionCheck.message || 'Subscription limit reached');
+      }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`upload_data_${user.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      // In production, implement proper PII hashing and security
+      const upload = await storage.createCustomerDataUpload({
+        userId: user.id,
+        audienceId: audienceId,
+        fileName: `upload_${Date.now()}.csv`,
+        fileSize: JSON.stringify(customerData).length,
+        recordCount: Array.isArray(customerData) ? customerData.length : 1,
+        dataType: dataType || 'email',
+        status: 'processing',
+        uploadMetadata: {
+          demo_mode: true,
+          upload_time: new Date().toISOString(),
+          data_type: dataType
+        }
+      });
+
+      // Update audience status
+      await storage.updateAudience(audienceId, {
+        status: 'ready',
+        size: Array.isArray(customerData) ? customerData.length : 1,
+        lastRefreshAt: new Date(),
+        updatedAt: new Date()
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          uploadId: upload.id,
+          audienceId: audienceId,
+          recordCount: upload.recordCount,
+          status: 'processing',
+          demo_mode: true
+        }
+      });
+    } catch (error: any) {
+      console.error('Upload customer data error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to upload customer data: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Update an audience
+   * PUT /api/campaigns/me/audiences/:audienceId
+   */
+  app.put('/api/campaigns/me/audiences/:audienceId', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { audienceId } = req.params;
+      const user = req.user;
+      const audienceData = req.body;
+
+      // Verify audience exists and belongs to authenticated user
+      const existingAudience = await storage.getAudience(audienceId);
+      if (!existingAudience) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Audience not found' 
+        });
+      }
+
+      if (existingAudience.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this audience');
+      }
+
+      const updates: any = { updatedAt: new Date() };
+      
+      const allowedFields = ['name', 'description', 'status', 'targetingCriteria', 
+                            'refreshFrequency', 'expiresAt', 'privacyLevel'];
+      
+      allowedFields.forEach(field => {
+        if (audienceData[field] !== undefined) {
+          if (field === 'expiresAt') {
+            updates[field] = audienceData[field] ? new Date(audienceData[field]) : null;
+          } else {
+            updates[field] = audienceData[field];
+          }
+        }
+      });
+
+      const updatedAudience = await storage.updateAudience(audienceId, updates);
+
+      if (updatedAudience) {
+        res.json({
+          success: true,
+          data: updatedAudience
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Audience not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Update audience error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to update audience: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Delete an audience
+   * DELETE /api/campaigns/me/audiences/:audienceId
+   */
+  app.delete('/api/campaigns/me/audiences/:audienceId', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { audienceId } = req.params;
+      const user = req.user;
+
+      // Verify audience exists and belongs to authenticated user
+      const audience = await storage.getAudience(audienceId);
+      if (!audience) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Audience not found' 
+        });
+      }
+
+      if (audience.userId !== user.id) {
+        return sendAuthError(res, 'unauthorized', 'Access denied to this audience');
+      }
+
+      const success = await storage.deleteAudience(audienceId);
+      
+      if (success) {
+        res.json({
+          success: true,
+          message: 'Audience deleted successfully'
+        });
+      } else {
+        res.status(404).json({
+          success: false,
+          error: 'Audience not found'
+        });
+      }
+    } catch (error: any) {
+      console.error('Delete audience error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to delete audience: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // PERFORMANCE METRICS ROUTES
+  // =============================================================================
+
+  /**
+   * Get campaign performance metrics
+   * GET /api/campaigns/metrics/:campaignId
+   */
+  app.get('/api/campaigns/metrics/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const { userEmail, startDate, endDate, granularity } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      // Get metrics from storage
+      const metrics = await storage.getCampaignMetrics(
+        campaignId, 
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined
+      );
+
+      // Generate demo metrics if none exist
+      if (metrics.length === 0) {
+        const demoMetrics = {
+          campaignId: campaignId,
+          date: new Date().toISOString().split('T')[0],
+          impressions: Math.floor(Math.random() * 10000) + 1000,
+          clicks: Math.floor(Math.random() * 500) + 50,
+          conversions: Math.floor(Math.random() * 25) + 5,
+          spend: Math.floor(Math.random() * 50000) + 10000, // in cents
+          revenue: Math.floor(Math.random() * 75000) + 15000, // in cents
+          ctr: 0,
+          cpc: 0,
+          cpm: 0,
+          roas: 0,
+          demo_mode: true
+        };
+
+        // Calculate derived metrics
+        demoMetrics.ctr = (demoMetrics.clicks / demoMetrics.impressions * 100);
+        demoMetrics.cpc = (demoMetrics.spend / demoMetrics.clicks);
+        demoMetrics.cpm = (demoMetrics.spend / demoMetrics.impressions * 1000);
+        demoMetrics.roas = (demoMetrics.revenue / demoMetrics.spend);
+
+        res.json({
+          success: true,
+          data: [demoMetrics],
+          demo_mode: true
+        });
+      } else {
+        res.json({
+          success: true,
+          data: metrics
+        });
+      }
+    } catch (error: any) {
+      console.error('Get campaign metrics error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch campaign metrics: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Get real-time campaign dashboard data
+   * GET /api/campaigns/metrics/dashboard/:userEmail
+   */
+  app.get('/api/campaigns/metrics/dashboard/:userEmail', async (req, res) => {
+    try {
+      const { userEmail } = req.params;
+      const { timeframe } = req.query;
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Get user's campaigns
+      const campaigns = await storage.getCampaigns(user.id);
+      
+      // Generate dashboard summary
+      const dashboardData = {
+        totalCampaigns: campaigns.length,
+        activeCampaigns: campaigns.filter(c => c.status === 'active').length,
+        totalSpend: Math.floor(Math.random() * 500000) + 100000, // Demo data in cents
+        totalRevenue: Math.floor(Math.random() * 750000) + 150000, // Demo data in cents
+        totalImpressions: Math.floor(Math.random() * 1000000) + 100000,
+        totalClicks: Math.floor(Math.random() * 50000) + 5000,
+        totalConversions: Math.floor(Math.random() * 2500) + 250,
+        averageCTR: 0,
+        averageCPC: 0,
+        averageROAS: 0,
+        topPerformingCampaigns: campaigns.slice(0, 5).map(campaign => ({
+          id: campaign.id,
+          name: campaign.name,
+          spend: Math.floor(Math.random() * 50000) + 5000,
+          revenue: Math.floor(Math.random() * 75000) + 7500,
+          roas: 0,
+          status: campaign.status
+        })),
+        demo_mode: true
+      };
+
+      // Calculate derived metrics
+      dashboardData.averageCTR = (dashboardData.totalClicks / dashboardData.totalImpressions * 100);
+      dashboardData.averageCPC = (dashboardData.totalSpend / dashboardData.totalClicks);
+      dashboardData.averageROAS = (dashboardData.totalRevenue / dashboardData.totalSpend);
+
+      // Calculate ROAS for top campaigns
+      dashboardData.topPerformingCampaigns.forEach(campaign => {
+        campaign.roas = campaign.revenue / campaign.spend;
+      });
+
+      res.json({
+        success: true,
+        data: dashboardData
+      });
+    } catch (error: any) {
+      console.error('Get dashboard metrics error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch dashboard metrics: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Get performance trends and insights
+   * GET /api/campaigns/metrics/trends/:userEmail
+   */
+  app.get('/api/campaigns/metrics/trends/:userEmail', async (req, res) => {
+    try {
+      const { userEmail } = req.params;
+      const { timeframe, metric } = req.query;
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Generate demo trend data
+      const trends = {
+        timeframe: timeframe || '30d',
+        metric: metric || 'spend',
+        data: [],
+        insights: [
+          'Spend increased by 15% over the last 30 days',
+          'CTR improved by 8% compared to previous period',
+          'Conversion rate is 23% above industry average',
+          'Top performing audience segment: 25-34 age group'
+        ],
+        recommendations: [
+          'Consider increasing budget for top performing campaigns',
+          'Optimize ad creative for mobile devices',
+          'Expand successful audience segments',
+          'Pause underperforming ad groups'
+        ],
+        demo_mode: true
+      };
+
+      // Generate trend data points
+      const days = timeframe === '7d' ? 7 : timeframe === '30d' ? 30 : 90;
+      for (let i = days; i >= 0; i--) {
+        const date = new Date();
+        date.setDate(date.getDate() - i);
+        
+        trends.data.push({
+          date: date.toISOString().split('T')[0],
+          value: Math.floor(Math.random() * 10000) + 1000,
+          change: (Math.random() - 0.5) * 100 // Random change percentage
+        });
+      }
+
+      res.json({
+        success: true,
+        data: trends
+      });
+    } catch (error: any) {
+      console.error('Get trends error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch trends: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // REPORTING ROUTES
+  // =============================================================================
+
+  /**
+   * Generate custom performance report
+   * POST /api/campaigns/reports/generate
+   */
+  app.post('/api/campaigns/reports/generate', async (req, res) => {
+    try {
+      const { userEmail, reportConfig } = req.body;
+
+      if (!userEmail || !reportConfig) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email and report configuration are required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Check subscription limits
+      const subscriptionCheck = await checkSubscriptionLimits(userEmail, 'generate_report');
+      if (!subscriptionCheck.allowed) {
+        return res.status(403).json({ 
+          success: false,
+          error: subscriptionCheck.message || 'Subscription limit reached' 
+        });
+      }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`generate_report_${user.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      // Generate demo report
+      const report = {
+        id: `report_${Date.now()}`,
+        userId: user.id,
+        name: reportConfig.name || 'Campaign Performance Report',
+        type: reportConfig.type || 'performance',
+        status: 'completed',
+        generatedAt: new Date().toISOString(),
+        config: reportConfig,
+        data: {
+          summary: {
+            totalCampaigns: 5,
+            totalSpend: 125000, // cents
+            totalRevenue: 187500, // cents
+            averageROAS: 1.5,
+            topMetrics: {
+              impressions: 245000,
+              clicks: 9800,
+              conversions: 392,
+              ctr: 4.0,
+              cpc: 1275 // cents
+            }
+          },
+          campaigns: [
+            {
+              name: 'Summer Sale Campaign',
+              spend: 45000,
+              revenue: 75000,
+              roas: 1.67,
+              impressions: 95000,
+              clicks: 3800,
+              conversions: 152
+            },
+            {
+              name: 'Back to School Promo',
+              spend: 38000,
+              revenue: 57000,
+              roas: 1.5,
+              impressions: 82000,
+              clicks: 2900,
+              conversions: 116
+            }
+          ],
+          timeRange: {
+            start: reportConfig.startDate || '2024-01-01',
+            end: reportConfig.endDate || '2024-01-31'
+          }
+        },
+        downloadUrl: `/api/campaigns/reports/download/report_${Date.now()}.pdf`,
+        demo_mode: true
+      };
+
+      res.json({
+        success: true,
+        data: report
+      });
+    } catch (error: any) {
+      console.error('Generate report error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to generate report: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Download report in various formats
+   * GET /api/campaigns/reports/download/:reportId
+   */
+  app.get('/api/campaigns/reports/download/:reportId', async (req, res) => {
+    try {
+      const { reportId } = req.params;
+      const { userEmail, format } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // In demo mode, return demo CSV content
+      if (format === 'csv' || !format) {
+        const csvContent = `Campaign Name,Spend,Revenue,ROAS,Impressions,Clicks,Conversions
+Summer Sale Campaign,$450.00,$750.00,1.67,95000,3800,152
+Back to School Promo,$380.00,$570.00,1.50,82000,2900,116
+Holiday Special,$320.00,$480.00,1.50,68000,2100,84`;
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="${reportId}.csv"`);
+        res.send(csvContent);
+      } else if (format === 'pdf') {
+        // In production, generate actual PDF
+        res.status(501).json({
+          success: false,
+          error: 'PDF generation not implemented in demo mode'
+        });
+      } else {
+        res.status(400).json({
+          success: false,
+          error: 'Unsupported format'
+        });
+      }
+    } catch (error: any) {
+      console.error('Download report error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to download report: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Get available native platform reports
+   * GET /api/campaigns/reports/native/:platformCredentialId
+   */
+  app.get('/api/campaigns/reports/native/:platformCredentialId', async (req, res) => {
+    try {
+      const { platformCredentialId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify platform credential belongs to user
+      const credential = await storage.getPlatformCredential(platformCredentialId);
+      if (!credential || credential.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      const platform = await storage.getPlatform(credential.platformId);
+      
+      // Return available native reports based on platform
+      const nativeReports = {
+        google_ads: [
+          { id: 'account_performance', name: 'Account Performance Report', description: 'Overall account metrics' },
+          { id: 'campaign_performance', name: 'Campaign Performance Report', description: 'Campaign-level metrics' },
+          { id: 'ad_group_performance', name: 'Ad Group Performance Report', description: 'Ad group metrics' },
+          { id: 'keyword_performance', name: 'Keyword Performance Report', description: 'Keyword-level data' }
+        ],
+        meta_ads: [
+          { id: 'campaign_insights', name: 'Campaign Insights', description: 'Campaign performance data' },
+          { id: 'ad_insights', name: 'Ad Insights', description: 'Individual ad performance' },
+          { id: 'audience_insights', name: 'Audience Insights', description: 'Audience performance metrics' }
+        ],
+        tiktok_ads: [
+          { id: 'campaign_report', name: 'Campaign Report', description: 'Campaign-level reporting' },
+          { id: 'adgroup_report', name: 'Ad Group Report', description: 'Ad group performance' },
+          { id: 'ad_report', name: 'Ad Report', description: 'Individual ad metrics' }
+        ]
+      };
+
+      const reports = nativeReports[platform?.name as keyof typeof nativeReports] || [];
+
+      res.json({
+        success: true,
+        data: {
+          platformName: platform?.name,
+          platformDisplayName: platform?.displayName,
+          availableReports: reports,
+          demo_mode: true
+        }
+      });
+    } catch (error: any) {
+      console.error('Get native reports error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch native reports: ' + error.message 
+      });
+    }
+  });
+
+  // =============================================================================
+  // OPTIMIZATION ROUTES
+  // =============================================================================
+
+  /**
+   * Get AI-powered optimization recommendations
+   * GET /api/campaigns/optimize/recommendations/:campaignId
+   */
+  app.get('/api/campaigns/optimize/recommendations/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      // Check subscription limits
+      const subscriptionCheck = await checkSubscriptionLimits(userEmail as string, 'ai_optimization');
+      if (!subscriptionCheck.allowed) {
+        return res.status(403).json({ 
+          success: false,
+          error: subscriptionCheck.message || 'AI optimization requires paid subscription' 
+        });
+      }
+
+      // Generate AI optimization recommendations (demo)
+      const recommendations = {
+        campaignId: campaignId,
+        generatedAt: new Date().toISOString(),
+        overallScore: Math.floor(Math.random() * 30) + 70, // 70-100
+        recommendations: [
+          {
+            id: 'budget_optimization',
+            type: 'budget',
+            priority: 'high',
+            title: 'Increase Budget for High-Performing Ad Groups',
+            description: 'Ad Groups 1 and 3 are showing strong ROAS. Consider increasing their budget by 25%.',
+            expectedImpact: '+15% conversions',
+            confidence: 85,
+            actionRequired: 'budget_adjustment',
+            details: {
+              currentBudget: campaign.budgetAmountCents,
+              recommendedBudget: Math.floor((campaign.budgetAmountCents || 10000) * 1.25),
+              expectedROAS: 1.8
+            }
+          },
+          {
+            id: 'keyword_optimization',
+            type: 'keywords',
+            priority: 'medium',
+            title: 'Add Negative Keywords',
+            description: 'Identified 12 low-performing keywords that are consuming budget without conversions.',
+            expectedImpact: '+8% efficiency',
+            confidence: 78,
+            actionRequired: 'keyword_management',
+            details: {
+              negativeKeywords: ['cheap alternative', 'free version', 'discount codes'],
+              estimatedSavings: 2500 // cents
+            }
+          },
+          {
+            id: 'ad_schedule_optimization',
+            type: 'schedule',
+            priority: 'medium',
+            title: 'Optimize Ad Scheduling',
+            description: 'Performance data shows 40% higher conversion rates between 2-6 PM weekdays.',
+            expectedImpact: '+12% conversions',
+            confidence: 72,
+            actionRequired: 'schedule_adjustment',
+            details: {
+              optimalHours: ['14:00-18:00'],
+              optimalDays: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+            }
+          },
+          {
+            id: 'audience_expansion',
+            type: 'audience',
+            priority: 'low',
+            title: 'Expand Similar Audiences',
+            description: 'Your top-performing audience segment can be expanded with similar users.',
+            expectedImpact: '+20% reach',
+            confidence: 65,
+            actionRequired: 'audience_creation',
+            details: {
+              baseAudienceSize: 150000,
+              expandedAudienceSize: 180000,
+              similarity: 90
+            }
+          }
+        ],
+        performanceMetrics: {
+          currentROAS: 1.45,
+          projectedROAS: 1.68,
+          currentCTR: 3.2,
+          projectedCTR: 3.8,
+          potentialSavings: 15000 // cents
+        },
+        demo_mode: true
+      };
+
+      res.json({
+        success: true,
+        data: recommendations
+      });
+    } catch (error: any) {
+      console.error('Get optimization recommendations error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch optimization recommendations: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Apply optimization recommendations
+   * POST /api/campaigns/optimize/apply
+   */
+  app.post('/api/campaigns/optimize/apply', async (req, res) => {
+    try {
+      const { userEmail, campaignId, recommendationIds, autoApprove } = req.body;
+
+      if (!userEmail || !campaignId || !recommendationIds) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email, campaign ID, and recommendation IDs are required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      // Check subscription limits
+      const subscriptionCheck = await checkSubscriptionLimits(userEmail, 'apply_optimization');
+      if (!subscriptionCheck.allowed) {
+        return res.status(403).json({ 
+          success: false,
+          error: subscriptionCheck.message || 'Auto-optimization requires paid subscription' 
+        });
+      }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`apply_optimization_${user.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      // Process optimization recommendations (demo)
+      const results = recommendationIds.map((id: string) => ({
+        recommendationId: id,
+        status: autoApprove ? 'applied' : 'pending_approval',
+        appliedAt: autoApprove ? new Date().toISOString() : null,
+        result: autoApprove ? 'Budget increased by 25% for high-performing ad groups' : 'Awaiting manual approval'
+      }));
+
+      // Create optimization rule entry
+      await storage.createOptimizationRule({
+        campaignId: campaignId,
+        name: 'AI Optimization Batch',
+        type: 'ai_generated',
+        conditions: { recommendationIds },
+        actions: { autoApprove, appliedRecommendations: results },
+        isActive: true,
+        metadata: {
+          demo_mode: true,
+          applied_at: new Date().toISOString(),
+          user_initiated: true
+        }
+      });
+
+      res.json({
+        success: true,
+        data: {
+          campaignId,
+          appliedRecommendations: results,
+          totalRecommendations: recommendationIds.length,
+          autoApproved: autoApprove,
+          demo_mode: true
+        }
+      });
+    } catch (error: any) {
+      console.error('Apply optimization error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to apply optimization: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Get optimization history
+   * GET /api/campaigns/optimize/history/:campaignId
+   */
+  app.get('/api/campaigns/optimize/history/:campaignId', async (req, res) => {
+    try {
+      const { campaignId } = req.params;
+      const { userEmail } = req.query;
+
+      if (!userEmail) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email is required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail as string);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      const optimizationRules = await storage.getOptimizationRulesByCampaign(campaignId);
+
+      res.json({
+        success: true,
+        data: {
+          campaignId,
+          optimizationHistory: optimizationRules,
+          totalOptimizations: optimizationRules.length
+        }
+      });
+    } catch (error: any) {
+      console.error('Get optimization history error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch optimization history: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create auto-optimization rule
+   * POST /api/campaigns/optimize/rules
+   */
+  app.post('/api/campaigns/optimize/rules', async (req, res) => {
+    try {
+      const { userEmail, campaignId, ruleName, ruleType, conditions, actions } = req.body;
+
+      if (!userEmail || !campaignId || !ruleName || !ruleType) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'User email, campaign ID, rule name, and type are required' 
+        });
+      }
+
+      const user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'User not found' 
+        });
+      }
+
+      // Verify campaign belongs to user
+      const campaign = await storage.getCampaign(campaignId);
+      if (!campaign || campaign.userId !== user.id) {
+        return res.status(403).json({ 
+          success: false,
+          error: 'Access denied' 
+        });
+      }
+
+      // Check subscription limits
+      const subscriptionCheck = await checkSubscriptionLimits(userEmail, 'create_optimization_rule');
+      if (!subscriptionCheck.allowed) {
+        return res.status(403).json({ 
+          success: false,
+          error: subscriptionCheck.message || 'Auto-optimization rules require paid subscription' 
+        });
+      }
+
+      const rule = await storage.createOptimizationRule({
+        campaignId,
+        name: ruleName,
+        type: ruleType,
+        conditions: conditions || {},
+        actions: actions || {},
+        isActive: true,
+        metadata: {
+          demo_mode: true,
+          created_via: 'api',
+          user_created: true
+        }
+      });
+
+      res.status(201).json({
+        success: true,
+        data: rule
+      });
+    } catch (error: any) {
+      console.error('Create optimization rule error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to create optimization rule: ' + error.message 
       });
     }
   });

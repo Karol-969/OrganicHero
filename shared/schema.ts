@@ -77,6 +77,38 @@ export const usageTracking = pgTable("usage_tracking", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// API Keys table for secure programmatic access
+export const apiKeys = pgTable("api_keys", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  keyId: text("key_id").notNull().unique(), // Public key identifier
+  userId: varchar("user_id").notNull().references(() => users.id),
+  name: text("name").notNull(), // User-friendly name for the key
+  hashedKey: text("hashed_key").notNull(), // Securely hashed API key
+  permissions: jsonb("permissions").notNull(), // Array of permissions
+  lastUsedAt: timestamp("last_used_at"),
+  expiresAt: timestamp("expires_at"), // Optional expiration
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  userIdIdx: index("api_keys_user_id_idx").on(table.userId),
+  keyIdIdx: index("api_keys_key_id_idx").on(table.keyId),
+}));
+
+// Rate Limiting table for persistent rate limit storage
+export const rateLimits = pgTable("rate_limits", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  identifier: text("identifier").notNull(), // IP address, user ID, or API key
+  action: text("action").notNull(), // 'login', 'register', 'api_request', etc.
+  count: integer("count").notNull().default(1),
+  resetTime: timestamp("reset_time").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+}, (table) => ({
+  identifierActionIdx: unique("rate_limits_identifier_action_unique").on(table.identifier, table.action),
+  resetTimeIdx: index("rate_limits_reset_time_idx").on(table.resetTime),
+}));
+
 // Insert schemas
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
@@ -105,6 +137,18 @@ export const insertUsageTrackingSchema = createInsertSchema(usageTracking).omit(
   updatedAt: true,
 });
 
+export const insertRateLimitSchema = createInsertSchema(rateLimits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertAPIKeySchema = createInsertSchema(apiKeys).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Export types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
@@ -116,6 +160,10 @@ export type PaymentHistory = typeof paymentHistory.$inferSelect;
 export type InsertPaymentHistory = z.infer<typeof insertPaymentHistorySchema>;
 export type UsageTracking = typeof usageTracking.$inferSelect;
 export type InsertUsageTracking = z.infer<typeof insertUsageTrackingSchema>;
+export type APIKey = typeof apiKeys.$inferSelect;
+export type InsertAPIKey = z.infer<typeof insertAPIKeySchema>;
+export type RateLimit = typeof rateLimits.$inferSelect;
+export type InsertRateLimit = z.infer<typeof insertRateLimitSchema>;
 
 // SEO Analysis Types
 export const seoAnalysisSchema = z.object({

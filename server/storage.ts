@@ -9,6 +9,10 @@ import {
   type InsertPaymentHistory,
   type UsageTracking,
   type InsertUsageTracking,
+  type APIKey,
+  type InsertAPIKey,
+  type RateLimit,
+  type InsertRateLimit,
   // Campaign Management Types
   type Platform,
   type InsertPlatform,
@@ -74,6 +78,19 @@ export interface IStorage {
   incrementAnalysisUsage(userId: string): Promise<UsageTracking>;
   incrementKeywordUsage(userId: string, count?: number): Promise<UsageTracking>;
   incrementCompetitorUsage(userId: string, count?: number): Promise<UsageTracking>;
+
+  // API Key operations for secure authentication
+  getAPIKeys(userId: string): Promise<APIKey[]>;
+  getAPIKey(keyId: string): Promise<APIKey | undefined>;
+  createAPIKey(apiKey: InsertAPIKey): Promise<APIKey>;
+  updateAPIKey(keyId: string, updates: Partial<APIKey>): Promise<APIKey | undefined>;
+  deleteAPIKey(keyId: string): Promise<boolean>;
+  updateAPIKeyLastUsed(keyId: string): Promise<void>;
+
+  // Rate Limiting operations for database-based persistent rate limiting
+  getRateLimit(identifier: string, action: string): Promise<RateLimit | undefined>;
+  createOrUpdateRateLimit(identifier: string, action: string, windowMs: number, maxRequests: number): Promise<boolean>;
+  cleanupExpiredRateLimits(): Promise<void>;
 
   // =============================================================================
   // CAMPAIGN MANAGEMENT OPERATIONS
@@ -219,6 +236,7 @@ export class MemStorage implements IStorage {
   private optimizationRules: Map<string, OptimizationRule>;
   private campaignAuditLogs: Map<string, CampaignAuditLog>;
   private customerDataUploads: Map<string, CustomerDataUpload>;
+  private apiKeys: Map<string, APIKey>;
 
   constructor() {
     this.users = new Map();
@@ -240,6 +258,7 @@ export class MemStorage implements IStorage {
     this.optimizationRules = new Map();
     this.campaignAuditLogs = new Map();
     this.customerDataUploads = new Map();
+    this.apiKeys = new Map();
     
     // Initialize default data
     this.initializeDefaultPlans();
@@ -1406,6 +1425,87 @@ export class MemStorage implements IStorage {
 
   async deleteCustomerDataUpload(id: string): Promise<boolean> {
     return this.customerDataUploads.delete(id);
+  }
+
+  // =============================================================================
+  // API KEY STORAGE METHODS - FOR SECURE AUTHENTICATION
+  // =============================================================================
+
+  async getAPIKeys(userId: string): Promise<APIKey[]> {
+    const apiKeys: APIKey[] = [];
+    for (const apiKey of this.apiKeys.values()) {
+      if (apiKey.userId === userId) {
+        apiKeys.push(apiKey);
+      }
+    }
+    return apiKeys;
+  }
+
+  async getAPIKey(keyId: string): Promise<APIKey | undefined> {
+    for (const apiKey of this.apiKeys.values()) {
+      if (apiKey.keyId === keyId) {
+        return apiKey;
+      }
+    }
+    return undefined;
+  }
+
+  async createAPIKey(insertApiKey: InsertAPIKey): Promise<APIKey> {
+    const id = randomUUID();
+    const now = new Date();
+    const apiKey: APIKey = { 
+      ...insertApiKey, 
+      id,
+      lastUsedAt: null,
+      createdAt: now,
+      updatedAt: now
+    };
+    this.apiKeys.set(id, apiKey);
+    console.log(`🔑 API key created in storage: ${insertApiKey.name} for user ${insertApiKey.userId}`);
+    return apiKey;
+  }
+
+  async updateAPIKey(keyId: string, updates: Partial<APIKey>): Promise<APIKey | undefined> {
+    // Find API key by keyId
+    let apiKeyToUpdate: APIKey | undefined;
+    let apiKeyStorageId: string | undefined;
+    
+    for (const [id, apiKey] of this.apiKeys.entries()) {
+      if (apiKey.keyId === keyId) {
+        apiKeyToUpdate = apiKey;
+        apiKeyStorageId = id;
+        break;
+      }
+    }
+    
+    if (!apiKeyToUpdate || !apiKeyStorageId) return undefined;
+    
+    const updatedApiKey: APIKey = { 
+      ...apiKeyToUpdate, 
+      ...updates, 
+      updatedAt: new Date() 
+    };
+    this.apiKeys.set(apiKeyStorageId, updatedApiKey);
+    return updatedApiKey;
+  }
+
+  async deleteAPIKey(keyId: string): Promise<boolean> {
+    // Find and delete API key by keyId
+    for (const [id, apiKey] of this.apiKeys.entries()) {
+      if (apiKey.keyId === keyId) {
+        this.apiKeys.delete(id);
+        console.log(`🔑 API key deleted from storage: ${apiKey.name}`);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async updateAPIKeyLastUsed(keyId: string): Promise<void> {
+    const apiKey = await this.getAPIKey(keyId);
+    if (apiKey) {
+      await this.updateAPIKey(keyId, { lastUsedAt: new Date() });
+    }
   }
 }
 
