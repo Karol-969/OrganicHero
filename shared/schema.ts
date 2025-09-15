@@ -129,3 +129,107 @@ export const seoAnalysisSchema = z.object({
 });
 
 export type SEOAnalysisResult = z.infer<typeof seoAnalysisSchema>;
+
+// Comprehensive Analysis with Action Plans
+export const actionItemSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  description: z.string(),
+  priority: z.enum(['critical', 'high', 'medium', 'low']),
+  impact: z.enum(['high', 'medium', 'low']),
+  effort: z.enum(['high', 'medium', 'low']),
+  category: z.enum(['technical', 'content', 'keywords', 'competitors', 'user_experience', 'local_seo']),
+  timeframe: z.enum(['immediate', 'this_week', 'this_month', 'next_quarter']),
+  steps: z.array(z.string()),
+  tools: z.array(z.string()).optional(),
+  expectedImprovement: z.string(),
+  dependencies: z.array(z.string()).optional(),
+});
+
+export const agentAnalysisSchema = z.object({
+  agentType: z.enum(['technical_seo', 'content_analysis', 'competitor_intelligence', 'keyword_research', 'serp_analysis', 'user_experience']),
+  status: z.enum(['pending', 'running', 'completed', 'failed']),
+  progress: z.number().min(0).max(100),
+  findings: z.array(z.string()).optional(),
+  recommendations: z.array(z.string()).optional(),
+  data: z.any().optional(),
+  error: z.string().optional(),
+  startTime: z.string().optional(),
+  endTime: z.string().optional(),
+});
+
+export const comprehensiveAnalysisSchema = z.object({
+  id: z.string(),
+  domain: z.string(),
+  status: z.enum(['pending', 'running', 'completed', 'failed']),
+  progress: z.number().min(0).max(100),
+  createdAt: z.string(),
+  completedAt: z.string().optional(),
+  
+  // Basic SEO Analysis (existing)
+  basicAnalysis: seoAnalysisSchema.optional(),
+  
+  // Multi-Agent Analysis Results
+  agentResults: z.array(agentAnalysisSchema),
+  
+  // Comprehensive Action Plan
+  actionPlan: z.object({
+    summary: z.string(),
+    overallScore: z.number().min(0).max(100),
+    potentialImprovement: z.number().min(0).max(100),
+    timeline: z.string(),
+    items: z.array(actionItemSchema),
+    quickWins: z.array(z.string()),
+    longTermGoals: z.array(z.string()),
+  }),
+  
+  // Competitive Intelligence
+  competitiveIntelligence: z.object({
+    marketPosition: z.string(),
+    competitiveAdvantages: z.array(z.string()),
+    competitiveGaps: z.array(z.string()),
+    opportunityAreas: z.array(z.string()),
+    benchmarkScores: z.object({
+      content: z.number(),
+      technical: z.number(),
+      authority: z.number(),
+      userExperience: z.number(),
+    }),
+  }),
+  
+  // Content Strategy
+  contentStrategy: z.object({
+    contentGaps: z.array(z.string()),
+    topicClusters: z.array(z.object({
+      topic: z.string(),
+      keywords: z.array(z.string()),
+      priority: z.enum(['high', 'medium', 'low']),
+    })),
+    contentCalendar: z.array(z.object({
+      week: z.string(),
+      contentType: z.string(),
+      topic: z.string(),
+      targetKeyword: z.string(),
+    })),
+  }),
+  
+  // Progress Tracking
+  progressTracking: z.object({
+    milestones: z.array(z.object({
+      title: z.string(),
+      dueDate: z.string(),
+      status: z.enum(['not_started', 'in_progress', 'completed']),
+      actionItems: z.array(z.string()),
+    })),
+    kpis: z.array(z.object({
+      metric: z.string(),
+      current: z.number(),
+      target: z.number(),
+      timeframe: z.string(),
+    })),
+  }),
+});
+
+export type ActionItem = z.infer<typeof actionItemSchema>;
+export type AgentAnalysis = z.infer<typeof agentAnalysisSchema>;
+export type ComprehensiveAnalysis = z.infer<typeof comprehensiveAnalysisSchema>;
