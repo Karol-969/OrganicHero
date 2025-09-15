@@ -1,10 +1,12 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
-import { seoAnalysisSchema, type SEOAnalysisResult } from "@shared/schema";
+import { seoAnalysisSchema, type SEOAnalysisResult, comprehensiveAnalysisSchema, type ComprehensiveAnalysis } from "@shared/schema";
 import { z } from "zod";
 import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
+import { MultiAgentCoordinator } from './agents';
+import { ActionPlanGenerator } from './action-plan-generator';
 
 // Helper function to make fetch requests with timeout
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
@@ -1984,6 +1986,281 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: 'Failed to analyze SEO. Please try again.' });
     }
   });
+
+  // In-memory storage for comprehensive analysis sessions
+  const comprehensiveAnalysisCache = new Map<string, ComprehensiveAnalysis>();
+
+  // Comprehensive Analysis & Action Plan endpoint
+  app.post('/api/analyze-comprehensive', async (req, res) => {
+    try {
+      const { url } = req.body;
+      
+      if (!url) {
+        return res.status(400).json({ error: 'URL is required' });
+      }
+
+      // Validate URL format
+      let validUrl = url;
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        validUrl = `https://${url}`;
+      }
+
+      try {
+        new URL(validUrl);
+      } catch {
+        return res.status(400).json({ error: 'Invalid URL format' });
+      }
+
+      const domain = extractDomain(validUrl);
+      const analysisId = `comprehensive_${domain}_${Date.now()}`;
+
+      console.log(`🚀 Starting comprehensive analysis for: ${domain}`);
+
+      // Initialize comprehensive analysis object
+      const comprehensiveAnalysis: ComprehensiveAnalysis = {
+        id: analysisId,
+        domain,
+        status: 'running',
+        progress: 0,
+        createdAt: new Date().toISOString(),
+        agentResults: [],
+        actionPlan: {
+          summary: '',
+          overallScore: 0,
+          potentialImprovement: 0,
+          timeline: '',
+          items: [],
+          quickWins: [],
+          longTermGoals: [],
+        },
+        competitiveIntelligence: {
+          marketPosition: '',
+          competitiveAdvantages: [],
+          competitiveGaps: [],
+          opportunityAreas: [],
+          benchmarkScores: {
+            content: 0,
+            technical: 0,
+            authority: 0,
+            userExperience: 0,
+          },
+        },
+        contentStrategy: {
+          contentGaps: [],
+          topicClusters: [],
+          contentCalendar: [],
+        },
+        progressTracking: {
+          milestones: [],
+          kpis: [],
+        },
+      };
+
+      // Store initial analysis state
+      comprehensiveAnalysisCache.set(analysisId, comprehensiveAnalysis);
+
+      // Send immediate response with analysis ID for progress tracking
+      res.json({
+        analysisId,
+        status: 'started',
+        message: 'Comprehensive analysis started. Use the analysis ID to track progress.',
+      });
+
+      // Run comprehensive analysis asynchronously
+      runComprehensiveAnalysisAsync(analysisId, validUrl, domain);
+
+    } catch (error) {
+      console.error('Comprehensive analysis initialization error:', error);
+      res.status(500).json({ error: 'Failed to start comprehensive analysis. Please try again.' });
+    }
+  });
+
+  // Get comprehensive analysis progress/results
+  app.get('/api/analyze-comprehensive/:analysisId', async (req, res) => {
+    try {
+      const { analysisId } = req.params;
+      const analysis = comprehensiveAnalysisCache.get(analysisId);
+
+      if (!analysis) {
+        return res.status(404).json({ error: 'Analysis not found or expired' });
+      }
+
+      res.json(analysis);
+    } catch (error) {
+      console.error('Get comprehensive analysis error:', error);
+      res.status(500).json({ error: 'Failed to get analysis results' });
+    }
+  });
+
+  // Async function to run comprehensive analysis
+  async function runComprehensiveAnalysisAsync(analysisId: string, url: string, domain: string) {
+    try {
+      const analysis = comprehensiveAnalysisCache.get(analysisId);
+      if (!analysis) return;
+
+      console.log(`🔍 Step 1: Basic SEO Analysis for ${domain}...`);
+      
+      // Step 1: Run basic SEO analysis (reuse existing logic)
+      analysis.progress = 10;
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      // Check cache first for basic analysis
+      let basicAnalysis = analysisCache.get(domain);
+      
+      if (!basicAnalysis) {
+        // Run fresh basic analysis
+        console.log('🕷️ Website content analysis...');
+        const businessIntel = await analyzeWebsiteContent(url);
+        
+        console.log('⚡ Page speed analysis...');
+        const pageSpeedData = await analyzePageSpeed(url);
+        
+        console.log('🔧 Technical SEO analysis...');
+        const technicalSeo = await analyzeTechnicalSEO(url, pageSpeedData);
+        
+        console.log('🏆 Competitor analysis...');
+        const competitorAnalysis = await analyzeCompetitors(domain, businessIntel);
+        
+        console.log('🎯 Keyword analysis...');
+        const keywordAnalysis = await analyzeKeywords(domain, url, businessIntel);
+        
+        console.log('🔍 SERP presence analysis...');
+        const serpAnalysis = await analyzeSERPPresence(domain, businessIntel);
+
+        // Build basic analysis result
+        const competitors = competitorAnalysis.competitors;
+        const keywords = keywordAnalysis.keywords;
+        const isDemoMode = competitorAnalysis.isDemoMode || keywordAnalysis.isDemoMode || serpAnalysis.isDemoMode;
+
+        // Calculate overall SEO score
+        const seoScore = Math.round(
+          (pageSpeedData.mobile * 0.3) +
+          (technicalSeo.score * 0.25) +
+          (Math.min(keywords.length * 5, 25) * 0.2) +
+          (Math.min(competitors.length * 6, 20) * 0.25)
+        );
+
+        // Generate improvements
+        const improvements = [
+          ...technicalSeo.issues,
+          {
+            title: "Improve Keyword Strategy",
+            impact: "high" as const,
+            description: "Expand keyword targeting and optimize content for better search visibility."
+          },
+          {
+            title: "Enhance Competitor Analysis",
+            impact: "medium" as const,
+            description: "Regularly monitor competitor strategies and identify new opportunities."
+          }
+        ];
+
+        basicAnalysis = {
+          seoScore,
+          domain,
+          pageSpeed: pageSpeedData,
+          technicalSeo,
+          competitors,
+          keywords,
+          improvements,
+          marketPosition: {
+            rank: competitors.find(c => c.name === domain)?.ranking || 3,
+            totalCompetitors: competitors.length + 12,
+            marketShare: Math.round(Math.max(100 / ((competitors.find(c => c.name === domain)?.ranking || 3) * 2.5), 1))
+          },
+          serpPresence: serpAnalysis.serpPresence,
+          businessIntelligence: {
+            businessType: businessIntel.businessType,
+            industry: businessIntel.industry,
+            location: businessIntel.location,
+            products: businessIntel.products,
+            services: businessIntel.services,
+            description: businessIntel.description,
+          },
+          isDemoMode
+        };
+
+        // Cache the basic analysis
+        analysisCache.set(domain, basicAnalysis);
+      }
+
+      analysis.basicAnalysis = basicAnalysis;
+      analysis.progress = 25;
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      console.log(`🤖 Step 2: Multi-Agent Analysis for ${domain}...`);
+      
+      // Step 2: Run multi-agent analysis
+      const businessIntelWithKeywords = {
+        ...basicAnalysis.businessIntelligence!,
+        keywords: basicAnalysis.keywords.map(k => k.keyword)
+      };
+      const coordinator = new MultiAgentCoordinator(
+        domain, 
+        businessIntelWithKeywords, 
+        basicAnalysis
+      );
+      
+      const agentResults = await coordinator.runComprehensiveAnalysis();
+      analysis.agentResults = agentResults;
+      analysis.progress = 50;
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      console.log(`🎯 Step 3: Action Plan Generation for ${domain}...`);
+      
+      // Step 3: Generate comprehensive action plan
+      const actionPlanGenerator = new ActionPlanGenerator(
+        domain,
+        agentResults,
+        businessIntelWithKeywords,
+        basicAnalysis
+      );
+
+      const actionPlan = await actionPlanGenerator.generateComprehensiveActionPlan();
+      analysis.actionPlan = actionPlan;
+      analysis.progress = 70;
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      console.log(`🧠 Step 4: Competitive Intelligence for ${domain}...`);
+      
+      // Step 4: Generate competitive intelligence
+      const competitiveIntelligence = await actionPlanGenerator.generateCompetitiveIntelligence();
+      analysis.competitiveIntelligence = competitiveIntelligence;
+      analysis.progress = 85;
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      console.log(`📝 Step 5: Content Strategy for ${domain}...`);
+      
+      // Step 5: Generate content strategy
+      const contentStrategy = await actionPlanGenerator.generateContentStrategy();
+      analysis.contentStrategy = contentStrategy;
+      analysis.progress = 95;
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      console.log(`📊 Step 6: Progress Tracking Setup for ${domain}...`);
+      
+      // Step 6: Generate progress tracking
+      const progressTracking = actionPlanGenerator.generateProgressTracking(actionPlan.items);
+      analysis.progressTracking = progressTracking;
+
+      // Mark as completed
+      analysis.status = 'completed';
+      analysis.progress = 100;
+      analysis.completedAt = new Date().toISOString();
+      comprehensiveAnalysisCache.set(analysisId, analysis);
+
+      console.log(`🎉 Comprehensive analysis completed for ${domain}!`);
+
+    } catch (error) {
+      console.error('Comprehensive analysis error:', error);
+      const analysis = comprehensiveAnalysisCache.get(analysisId);
+      if (analysis) {
+        analysis.status = 'failed';
+        analysis.progress = 0;
+        comprehensiveAnalysisCache.set(analysisId, analysis);
+      }
+    }
+  }
 
   const httpServer = createServer(app);
 
