@@ -27,6 +27,7 @@ const createCampaignSchema = insertCampaignSchema.extend({
   name: z.string().min(1, "Campaign name is required"),
   objective: z.string().min(1, "Objective is required"),
   budgetType: z.string().min(1, "Budget type is required"),
+  platformCredentialId: z.string().min(1, "Platform credential is required"),
 });
 
 type CreateGroupForm = z.infer<typeof createGroupSchema>;
@@ -52,6 +53,11 @@ export default function Campaigns() {
 
   // Fetch platforms for campaign creation
   const { data: platforms } = useQuery({
+    queryKey: ['/api/campaigns/platforms'],
+  });
+
+  // Fetch user's platform credentials
+  const { data: platformCredentials, isLoading: credentialsLoading } = useQuery<any[]>({
     queryKey: ['/api/campaigns/me/platforms'],
   });
 
@@ -76,6 +82,7 @@ export default function Campaigns() {
       budgetType: "daily",
       timezone: "UTC",
       tags: [],
+      platformCredentialId: "",
     },
   });
 
@@ -122,8 +129,6 @@ export default function Campaigns() {
     const campaignData = {
       ...data,
       groupId: selectedGroupId,
-      // Add required fields that might be missing
-      platformCredentialId: data.platformCredentialId || '',
     };
     createCampaignMutation.mutate(campaignData);
   };
@@ -241,6 +246,25 @@ export default function Campaigns() {
                       Create a new advertising campaign in the selected group
                     </DialogDescription>
                   </DialogHeader>
+                  {!credentialsLoading && platformCredentials?.length === 0 && (
+                    <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 mb-4">
+                      <div className="flex items-start">
+                        <div className="text-yellow-600 dark:text-yellow-400">
+                          <svg className="w-5 h-5 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                          </svg>
+                        </div>
+                        <div className="ml-3">
+                          <h3 className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                            No Platform Accounts Connected
+                          </h3>
+                          <p className="mt-1 text-sm text-yellow-700 dark:text-yellow-300">
+                            You need to connect at least one advertising platform account before creating campaigns.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                   <Form {...campaignForm}>
                     <form onSubmit={campaignForm.handleSubmit(onCreateCampaign)} className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
@@ -303,6 +327,37 @@ export default function Campaigns() {
                           </FormItem>
                         )}
                       />
+                      <FormField
+                        control={campaignForm.control}
+                        name="platformCredentialId"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Platform Account</FormLabel>
+                            <Select onValueChange={field.onChange} defaultValue={field.value}>
+                              <FormControl>
+                                <SelectTrigger data-testid="select-platform-credential">
+                                  <SelectValue placeholder="Select platform account" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {credentialsLoading ? (
+                                  <SelectItem value="" disabled>Loading accounts...</SelectItem>
+                                ) : platformCredentials?.length === 0 ? (
+                                  <SelectItem value="" disabled>No connected accounts. Connect a platform first.</SelectItem>
+                                ) : (
+                                  platformCredentials?.map((credential: any) => (
+                                    <SelectItem key={credential.id} value={credential.id}>
+                                      {credential.accountName || credential.platformName} 
+                                      {credential.accountId && ` (${credential.accountId})`}
+                                    </SelectItem>
+                                  ))
+                                )}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           control={campaignForm.control}
@@ -359,10 +414,21 @@ export default function Campaigns() {
                         </Button>
                         <Button
                           type="submit"
-                          disabled={createCampaignMutation.isPending}
+                          disabled={
+                            createCampaignMutation.isPending ||
+                            credentialsLoading ||
+                            !platformCredentials?.length ||
+                            !campaignForm.watch('platformCredentialId') ||
+                            !campaignForm.watch('name')
+                          }
                           data-testid="button-submit-campaign"
                         >
-                          {createCampaignMutation.isPending ? "Creating..." : "Create Campaign"}
+                          {createCampaignMutation.isPending 
+                            ? "Creating..." 
+                            : !platformCredentials?.length 
+                              ? "No Connected Accounts" 
+                              : "Create Campaign"
+                          }
                         </Button>
                       </div>
                     </form>
