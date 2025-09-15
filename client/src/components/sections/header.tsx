@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useScrollSpy } from "@/hooks/use-scroll-spy";
-import { Menu, X } from "lucide-react";
+import { useLocation } from "wouter";
+import { Menu, X, Crown } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "#analysis", label: "Try It Free" },
@@ -14,6 +16,7 @@ const navItems = [
 
 export default function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [, setLocation] = useLocation();
   const activeSection = useScrollSpy(navItems.map(item => item.href.substring(1)));
 
   const scrollToSection = (href: string) => {
@@ -33,6 +36,11 @@ export default function Header() {
     }
   };
 
+  const navigateToPricing = () => {
+    setLocation('/pricing');
+    setMobileMenuOpen(false);
+  };
+
   return (
     <header className="bg-card/80 backdrop-blur-lg sticky top-0 z-50 shadow-sm border-b border-border">
       <div className="container mx-auto px-6 py-4">
@@ -41,20 +49,30 @@ export default function Header() {
             🚀 Organic <span className="text-primary">Hero</span>
           </div>
           
-          <nav className="hidden md:flex space-x-8 text-muted-foreground font-medium">
-            {navItems.map((item) => (
-              <button
-                key={item.href}
-                onClick={() => scrollToSection(item.href)}
-                className={`nav-link hover:text-primary transition-colors ${
-                  activeSection === item.href.substring(1) ? 'active' : ''
-                }`}
-                data-testid={`nav-${item.href.substring(1)}`}
-              >
-                {item.label}
-              </button>
-            ))}
-          </nav>
+          <div className="hidden md:flex items-center space-x-8">
+            <nav className="flex space-x-8 text-muted-foreground font-medium">
+              {navItems.map((item) => (
+                <button
+                  key={item.href}
+                  onClick={() => scrollToSection(item.href)}
+                  className={`nav-link hover:text-primary transition-colors ${
+                    activeSection === item.href.substring(1) ? 'active' : ''
+                  }`}
+                  data-testid={`nav-${item.href.substring(1)}`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+            <Button 
+              onClick={navigateToPricing}
+              className="bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white"
+              data-testid="button-pricing"
+            >
+              <Crown className="w-4 h-4 mr-2" />
+              Pricing
+            </Button>
+          </div>
           
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
@@ -68,7 +86,7 @@ export default function Header() {
       </div>
       
       {mobileMenuOpen && (
-        <div className="md:hidden px-6 pb-4 border-t border-border bg-card/95">
+        <div className="md:hidden px-6 pb-4 border-t border-border bg-card/95 space-y-2">
           {navItems.map((item) => (
             <button
               key={item.href}

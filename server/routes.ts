@@ -7,6 +7,7 @@ import * as cheerio from 'cheerio';
 import puppeteer from 'puppeteer';
 import { MultiAgentCoordinator } from './agents';
 import { ActionPlanGenerator } from './action-plan-generator';
+import Stripe from 'stripe';
 
 // Helper function to make fetch requests with timeout
 async function fetchWithTimeout(url: string, options: RequestInit = {}, timeoutMs: number = 10000): Promise<Response> {
@@ -1863,7 +1864,7 @@ async function analyzeSerpKeyword(keyword: string, domain: string, serperApiKey?
         }
       }).filter(Boolean)).size;
       
-      const difficulty = domainCount >= 8 ? 'high' : domainCount >= 5 ? 'medium' : 'low';
+      const difficulty: 'high' | 'medium' | 'low' = domainCount >= 8 ? 'high' : domainCount >= 5 ? 'medium' : 'low';
       
       // Estimate volume based on search features
       const hasAds = searchData.ads?.length > 0;
@@ -1890,7 +1891,7 @@ async function analyzeSerpKeyword(keyword: string, domain: string, serperApiKey?
 }
 
 // Helper function to map DataForSEO competition levels to difficulty
-function mapCompetitionToDifficulty(competitionLevel?: string): string {
+function mapCompetitionToDifficulty(competitionLevel?: string): 'high' | 'medium' | 'low' {
   switch (competitionLevel?.toLowerCase()) {
     case 'high': return 'high';
     case 'medium': return 'medium';
@@ -2002,7 +2003,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         pageSpeed: pageSpeedData,
         technicalSeo,
         competitors,
-        keywords,
+        keywords: keywords.map((k: any) => ({
+          ...k,
+          difficulty: k.difficulty as 'high' | 'medium' | 'low'
+        })),
         improvements: improvements.slice(0, 4), // Limit to 4 improvements
         marketPosition: {
           rank: competitors.find(c => c.name === domain)?.ranking || 3,
@@ -2211,7 +2215,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pageSpeed: pageSpeedData,
           technicalSeo,
           competitors,
-          keywords,
+          keywords: keywords.map((k: any) => ({
+            ...k,
+            difficulty: k.difficulty as 'high' | 'medium' | 'low'
+          })),
           improvements,
           marketPosition: {
             rank: competitors.find(c => c.name === domain)?.ranking || 3,
@@ -2231,10 +2238,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
 
         // Cache the basic analysis
-        analysisCache.set(domain, basicAnalysis);
+        if (basicAnalysis) {
+          analysisCache.set(domain, basicAnalysis);
+        }
       }
 
-      analysis.basicAnalysis = basicAnalysis;
+      if (basicAnalysis) {
+        analysis.basicAnalysis = basicAnalysis;
+      }
       analysis.progress = 25;
       comprehensiveAnalysisCache.set(analysisId, analysis);
 
@@ -2242,13 +2253,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Step 2: Run multi-agent analysis
       const businessIntelWithKeywords = {
-        ...basicAnalysis.businessIntelligence!,
-        keywords: basicAnalysis.keywords.map(k => k.keyword)
+        businessType: basicAnalysis?.businessIntelligence?.businessType || 'business',
+        industry: basicAnalysis?.businessIntelligence?.industry || 'general',
+        location: basicAnalysis?.businessIntelligence?.location || 'United States',
+        products: basicAnalysis?.businessIntelligence?.products || [],
+        services: basicAnalysis?.businessIntelligence?.services || [],
+        description: basicAnalysis?.businessIntelligence?.description || 'Business website',
+        keywords: basicAnalysis?.keywords.map(k => k.keyword) || []
       };
       const coordinator = new MultiAgentCoordinator(
         domain, 
         businessIntelWithKeywords, 
-        basicAnalysis
+        basicAnalysis!
       );
       
       const agentResults = await coordinator.runComprehensiveAnalysis();
@@ -2263,7 +2279,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         domain,
         agentResults,
         businessIntelWithKeywords,
-        basicAnalysis
+        basicAnalysis!
       );
 
       const actionPlan = await actionPlanGenerator.generateComprehensiveActionPlan();
@@ -2311,6 +2327,396 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
   }
+
+  // Initialize Stripe (from Stripe blueprint)
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.warn('⚠️  STRIPE_SECRET_KEY not found. Stripe functionality will be limited to demo mode.');
+  }
+
+  const stripe = process.env.STRIPE_SECRET_KEY 
+    ? new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2025-08-27.basil" })
+    : null;
+
+  // Stripe Subscription Management Routes
+  
+  // Get subscription plans
+  app.get('/api/subscription-plans', async (_req, res) => {
+    try {
+      const plans = await storage.getSubscriptionPlans();
+      res.json(plans);
+    } catch (error: any) {
+      console.error('Get subscription plans error:', error);
+      res.status(500).json({ error: 'Failed to get subscription plans' });
+    }
+  });
+
+  // Create payment intent for one-time payments
+  app.post('/api/create-payment-intent', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ 
+          error: 'Stripe not configured',
+          demoMode: true,
+          message: 'Configure STRIPE_SECRET_KEY to enable payments'
+        });
+      }
+
+      const { amount } = req.body;
+      
+      if (!amount || amount <= 0) {
+        return res.status(400).json({ error: 'Valid amount is required' });
+      }
+
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: Math.round(amount * 100), // Convert to cents
+        currency: "usd",
+        metadata: {
+          integration_check: 'accept_a_payment'
+        }
+      });
+
+      res.json({ clientSecret: paymentIntent.client_secret });
+    } catch (error: any) {
+      console.error('Create payment intent error:', error);
+      res.status(500).json({ 
+        error: 'Error creating payment intent: ' + error.message 
+      });
+    }
+  });
+
+  // Create or get subscription (main subscription endpoint)
+  app.post('/api/get-or-create-subscription', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ 
+          error: 'Stripe not configured',
+          demoMode: true,
+          message: 'Configure STRIPE_SECRET_KEY to enable subscriptions'
+        });
+      }
+
+      // For now, we'll work without authentication, but this would normally require auth
+      const { planName, userEmail, userName } = req.body;
+
+      if (!planName || !userEmail) {
+        return res.status(400).json({ 
+          error: 'Plan name and user email are required' 
+        });
+      }
+
+      // Get subscription plan
+      const plan = await storage.getSubscriptionPlanByName(planName);
+      if (!plan) {
+        return res.status(404).json({ error: 'Subscription plan not found' });
+      }
+
+      // Find or create user by email
+      let user = await storage.getUserByEmail(userEmail);
+      if (!user) {
+        // Create temporary user for demo purposes
+        user = await storage.createUser({
+          username: userName || userEmail.split('@')[0],
+          email: userEmail,
+          password: 'temp_password' // This would be handled differently in production
+        });
+      }
+
+      // Check if user already has an active subscription
+      if (user.stripeSubscriptionId) {
+        const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+        
+        if (subscription.status === 'active') {
+          return res.json({
+            subscriptionId: subscription.id,
+            status: subscription.status,
+            message: 'User already has an active subscription'
+          });
+        }
+      }
+
+      // Create Stripe customer if needed
+      let stripeCustomerId = user.stripeCustomerId;
+      if (!stripeCustomerId) {
+        const customer = await stripe.customers.create({
+          email: user.email!,
+          name: user.username,
+          metadata: {
+            userId: user.id
+          }
+        });
+        
+        stripeCustomerId = customer.id;
+        await storage.updateUserStripeCustomerId(user.id, stripeCustomerId);
+      }
+
+      // Create subscription
+      const subscription = await stripe.subscriptions.create({
+        customer: stripeCustomerId,
+        items: [{
+          price: plan.stripePriceId,
+        }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+      });
+
+      // Update user with subscription info
+      await storage.updateUserStripeSubscriptionId(user.id, subscription.id);
+      await storage.updateUserSubscriptionStatus(user.id, subscription.status);
+      await storage.updateUserSubscriptionPlan(user.id, planName.toLowerCase());
+
+      // Create subscription history entry
+      await storage.createSubscriptionHistoryEntry({
+        userId: user.id,
+        stripeSubscriptionId: subscription.id,
+        planId: plan.id,
+        status: subscription.status,
+        startDate: new Date()
+      });
+
+      const latestInvoice = subscription.latest_invoice as Stripe.Invoice;
+      const paymentIntent = ((latestInvoice as any)?.payment_intent as any) as Stripe.PaymentIntent;
+
+      res.json({
+        subscriptionId: subscription.id,
+        clientSecret: paymentIntent?.client_secret,
+        status: subscription.status
+      });
+
+    } catch (error: any) {
+      console.error('Create subscription error:', error);
+      res.status(500).json({ 
+        error: 'Error creating subscription: ' + error.message 
+      });
+    }
+  });
+
+  // Cancel subscription
+  app.post('/api/cancel-subscription', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ 
+          error: 'Stripe not configured',
+          demoMode: true 
+        });
+      }
+
+      const { subscriptionId, reason } = req.body;
+
+      if (!subscriptionId) {
+        return res.status(400).json({ error: 'Subscription ID is required' });
+      }
+
+      const subscription = await stripe.subscriptions.cancel(subscriptionId);
+
+      // Update user subscription status
+      const user = await storage.getUserByStripeCustomerId(subscription.customer as string);
+      if (user) {
+        await storage.updateUserSubscriptionStatus(user.id, 'canceled');
+        
+        // Create history entry
+        await storage.createSubscriptionHistoryEntry({
+          userId: user.id,
+          stripeSubscriptionId: subscriptionId,
+          planId: null,
+          status: 'canceled',
+          canceledAt: new Date(),
+          cancelReason: reason || 'User requested cancellation'
+        });
+      }
+
+      res.json({ 
+        subscriptionId: subscription.id, 
+        status: subscription.status 
+      });
+
+    } catch (error: any) {
+      console.error('Cancel subscription error:', error);
+      res.status(500).json({ 
+        error: 'Error canceling subscription: ' + error.message 
+      });
+    }
+  });
+
+  // Get user subscription status
+  app.get('/api/subscription-status/:userEmail', async (req, res) => {
+    try {
+      const { userEmail } = req.params;
+      const user = await storage.getUserByEmail(userEmail);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      let subscriptionStatus = null;
+      if (user.stripeSubscriptionId && stripe) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          subscriptionStatus = {
+            id: subscription.id,
+            status: subscription.status,
+            currentPeriodEnd: (subscription as any).current_period_end,
+            plan: user.subscriptionPlan
+          };
+        } catch (error) {
+          console.error('Error fetching subscription from Stripe:', error);
+        }
+      }
+
+      res.json({
+        user: {
+          id: user.id,
+          email: user.email,
+          subscriptionPlan: user.subscriptionPlan,
+          subscriptionStatus: user.subscriptionStatus
+        },
+        subscription: subscriptionStatus
+      });
+
+    } catch (error: any) {
+      console.error('Get subscription status error:', error);
+      res.status(500).json({ 
+        error: 'Error getting subscription status: ' + error.message 
+      });
+    }
+  });
+
+  // Stripe webhook endpoint for handling subscription events
+  app.post('/api/stripe-webhook', async (req, res) => {
+    try {
+      if (!stripe) {
+        return res.status(503).json({ error: 'Stripe not configured' });
+      }
+
+      const sig = req.headers['stripe-signature'] as string;
+      const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
+      if (!endpointSecret) {
+        console.warn('⚠️  STRIPE_WEBHOOK_SECRET not configured');
+        return res.status(400).json({ error: 'Webhook secret not configured' });
+      }
+
+      let event: Stripe.Event;
+
+      try {
+        event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);
+      } catch (err: any) {
+        console.error('Webhook signature verification failed:', err.message);
+        return res.status(400).json({ error: `Webhook Error: ${err.message}` });
+      }
+
+      // Handle the event
+      switch (event.type) {
+        case 'customer.subscription.updated':
+        case 'customer.subscription.deleted':
+          const subscription = event.data.object as Stripe.Subscription;
+          
+          // Find user by customer ID
+          const user = await storage.getUserByStripeCustomerId(subscription.customer as string);
+          if (user) {
+            await storage.updateUserSubscriptionStatus(user.id, subscription.status);
+            
+            // Create history entry
+            await storage.createSubscriptionHistoryEntry({
+              userId: user.id,
+              stripeSubscriptionId: subscription.id,
+              planId: null,
+              status: subscription.status,
+              endDate: subscription.status === 'canceled' ? new Date() : null
+            });
+          }
+          break;
+
+        case 'invoice.payment_succeeded':
+          const invoice = event.data.object as Stripe.Invoice;
+          
+          if (invoice.customer && (invoice as any).subscription) {
+            const user = await storage.getUserByStripeCustomerId(invoice.customer as string);
+            if (user) {
+              // Record successful payment
+              await storage.createPaymentHistoryEntry({
+                userId: user.id,
+                stripePaymentIntentId: typeof (invoice as any).payment_intent === 'string' ? (invoice as any).payment_intent : ((invoice as any).payment_intent as any)?.id || '',
+                stripeInvoiceId: invoice.id,
+                amount: (invoice.amount_paid / 100).toString(),
+                currency: invoice.currency,
+                status: 'succeeded',
+                description: 'Subscription payment'
+              });
+            }
+          }
+          break;
+
+        case 'invoice.payment_failed':
+          // Handle failed payment
+          const failedInvoice = event.data.object as Stripe.Invoice;
+          
+          if (failedInvoice.customer) {
+            const user = await storage.getUserByStripeCustomerId(failedInvoice.customer as string);
+            if (user) {
+              await storage.createPaymentHistoryEntry({
+                userId: user.id,
+                stripePaymentIntentId: typeof (failedInvoice as any).payment_intent === 'string' ? (failedInvoice as any).payment_intent : ((failedInvoice as any).payment_intent as any)?.id || '',
+                stripeInvoiceId: failedInvoice.id,
+                amount: (failedInvoice.amount_due / 100).toString(),
+                currency: failedInvoice.currency,
+                status: 'failed',
+                description: 'Subscription payment failed'
+              });
+            }
+          }
+          break;
+
+        default:
+          console.log(`Unhandled event type ${event.type}`);
+      }
+
+      res.json({ received: true });
+
+    } catch (error: any) {
+      console.error('Webhook error:', error);
+      res.status(500).json({ error: 'Webhook processing failed' });
+    }
+  });
+
+  // Get user usage stats
+  app.get('/api/usage-stats/:userEmail', async (req, res) => {
+    try {
+      const { userEmail } = req.params;
+      const user = await storage.getUserByEmail(userEmail);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const now = new Date();
+      const currentMonth = now.getMonth() + 1;
+      const currentYear = now.getFullYear();
+
+      const usage = await storage.getUserUsage(user.id, currentMonth, currentYear);
+      const plan = await storage.getSubscriptionPlanByName(user.subscriptionPlan || 'free');
+
+      res.json({
+        currentUsage: usage || {
+          analysesUsed: 0,
+          keywordsTracked: 0,
+          competitorsAnalyzed: 0
+        },
+        limits: plan ? {
+          maxAnalyses: plan.maxAnalyses,
+          maxKeywords: plan.maxKeywords,
+          maxCompetitors: plan.maxCompetitors
+        } : null,
+        plan: user.subscriptionPlan
+      });
+
+    } catch (error: any) {
+      console.error('Get usage stats error:', error);
+      res.status(500).json({ 
+        error: 'Error getting usage stats: ' + error.message 
+      });
+    }
+  });
 
   const httpServer = createServer(app);
 
