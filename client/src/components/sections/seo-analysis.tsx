@@ -10,6 +10,7 @@ import { Bar, BarChart, Pie, PieChart as RechartsPieChart, Cell, Line, LineChart
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import type { SEOAnalysisResult, ComprehensiveAnalysis } from "@shared/schema";
 
 
@@ -19,6 +20,7 @@ export default function SEOAnalysis() {
   const [comprehensiveAnalysisId, setComprehensiveAnalysisId] = useState<string | null>(null);
   const [comprehensiveResults, setComprehensiveResults] = useState<ComprehensiveAnalysis | null>(null);
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
 
   const analyzeMutation = useMutation({
     mutationFn: async (urlToAnalyze: string) => {
@@ -57,9 +59,13 @@ export default function SEOAnalysis() {
     },
     onSuccess: (data) => {
       setComprehensiveAnalysisId(data.analysisId);
+      // Store the URL in localStorage for the analysis page
+      localStorage.setItem('currentAnalysisUrl', url.trim());
+      // Navigate to the dedicated analysis page
+      setLocation(`/analysis/${data.analysisId}`);
       toast({
         title: "Comprehensive Analysis Started!",
-        description: "Your detailed SEO analysis is running. This may take a few minutes to complete.",
+        description: "Redirecting to your dedicated analysis dashboard...",
       });
     },
     onError: (error) => {
