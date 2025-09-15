@@ -4,7 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Search, TrendingUp, Users, Target, CheckCircle, AlertCircle, XCircle } from "lucide-react";
+import { Search, TrendingUp, Users, Target, CheckCircle, AlertCircle, XCircle, Globe, MapPin, Eye, Building2 } from "lucide-react";
 import { useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -164,6 +164,74 @@ export default function SEOAnalysis() {
                 </CardContent>
               </Card>
 
+              {/* Business Intelligence */}
+              {results.businessIntelligence && (
+                <Card data-testid="business-intelligence-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Building2 className="w-5 h-5 text-primary" />
+                      Business Intelligence
+                    </CardTitle>
+                    <CardDescription>
+                      Extracted insights from your website content
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-3">
+                        <div>
+                          <span className="text-sm text-muted-foreground">Business Type:</span>
+                          <span className="ml-2 font-medium">{results.businessIntelligence.businessType}</span>
+                        </div>
+                        <div>
+                          <span className="text-sm text-muted-foreground">Industry:</span>
+                          <span className="ml-2 font-medium">{results.businessIntelligence.industry}</span>
+                        </div>
+                        {results.businessIntelligence.location && (
+                          <div>
+                            <span className="text-sm text-muted-foreground">Location:</span>
+                            <span className="ml-2 font-medium">{results.businessIntelligence.location}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-3">
+                        {results.businessIntelligence.products.length > 0 && (
+                          <div>
+                            <span className="text-sm text-muted-foreground block mb-1">Products:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {results.businessIntelligence.products.slice(0, 4).map((product, index) => (
+                                <Badge key={index} variant="secondary" className="text-xs">{product}</Badge>
+                              ))}
+                              {results.businessIntelligence.products.length > 4 && (
+                                <Badge variant="outline" className="text-xs">+{results.businessIntelligence.products.length - 4} more</Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        {results.businessIntelligence.services.length > 0 && (
+                          <div>
+                            <span className="text-sm text-muted-foreground block mb-1">Services:</span>
+                            <div className="flex flex-wrap gap-1">
+                              {results.businessIntelligence.services.slice(0, 4).map((service, index) => (
+                                <Badge key={index} variant="secondary" className="text-xs">{service}</Badge>
+                              ))}
+                              {results.businessIntelligence.services.length > 4 && (
+                                <Badge variant="outline" className="text-xs">+{results.businessIntelligence.services.length - 4} more</Badge>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {results.businessIntelligence.description && (
+                      <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                        <p className="text-sm text-muted-foreground italic">"{results.businessIntelligence.description}"</p>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Competitor Analysis */}
               <Card>
                 <CardHeader>
@@ -218,6 +286,176 @@ export default function SEOAnalysis() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* SERP Presence Analysis */}
+              {results.serpPresence && (
+                <Card data-testid="serp-presence-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Globe className="w-5 h-5 text-primary" />
+                      Google SERP Presence Analysis
+                    </CardTitle>
+                    <CardDescription>
+                      Your visibility across Google's search results features
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Search className="w-4 h-4 text-blue-600" />
+                            <span className="font-medium">Organic Results</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.organicResults.length > 0 ? (
+                              <div>
+                                <Badge variant="secondary">#{results.serpPresence.organicResults.filter(r => r.position).map(r => r.position!).reduce((min, pos) => Math.min(min, pos), Infinity)}</Badge>
+                                <div className="text-xs text-muted-foreground mt-1">
+                                  {results.serpPresence.organicResults.length} result{results.serpPresence.organicResults.length !== 1 ? 's' : ''}
+                                </div>
+                              </div>
+                            ) : (
+                              <Badge variant="outline">Not found</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <MapPin className="w-4 h-4 text-red-600" />
+                            <span className="font-medium">Maps/Local</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.mapsResults.found ? (
+                              <div>
+                                <Badge variant="secondary">Listed</Badge>
+                                {results.serpPresence.mapsResults.rating && (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    ⭐ {results.serpPresence.mapsResults.rating}/5
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <Badge variant="outline">Not listed</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Eye className="w-4 h-4 text-green-600" />
+                            <span className="font-medium">Images</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.imagesResults.found ? (
+                              <Badge variant="secondary">Present ({results.serpPresence.imagesResults.count})</Badge>
+                            ) : (
+                              <Badge variant="outline">Not found</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <TrendingUp className="w-4 h-4 text-purple-600" />
+                            <span className="font-medium">Paid Ads</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.paidAds.length > 0 ? (
+                              <Badge variant="secondary">{results.serpPresence.paidAds.length} ads</Badge>
+                            ) : (
+                              <Badge variant="outline">No ads</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <AlertCircle className="w-4 h-4 text-orange-600" />
+                            <span className="font-medium">People Also Ask</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.peopleAlsoAsk.questions.length > 0 ? (
+                              <div>
+                                <Badge variant="secondary">{results.serpPresence.peopleAlsoAsk.questions.length} questions</Badge>
+                              </div>
+                            ) : (
+                              <Badge variant="outline">None found</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Target className="w-4 h-4 text-indigo-600" />
+                            <span className="font-medium">Featured Snippets</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.featuredSnippets.found ? (
+                              <Badge variant="secondary">Featured</Badge>
+                            ) : (
+                              <Badge variant="outline">Not featured</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Building2 className="w-4 h-4 text-blue-800" />
+                            <span className="font-medium">Knowledge Panel</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.knowledgePanel.found ? (
+                              <Badge variant="secondary">Present</Badge>
+                            ) : (
+                              <Badge variant="outline">Not present</Badge>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Globe className="w-4 h-4 text-gray-600" />
+                            <span className="font-medium">News & Video</span>
+                          </div>
+                          <div className="text-right">
+                            {results.serpPresence.newsResults.found || results.serpPresence.videoResults.found ? (
+                              <div className="flex gap-1">
+                                {results.serpPresence.newsResults.found && <Badge variant="secondary" className="text-xs">News</Badge>}
+                                {results.serpPresence.videoResults.found && <Badge variant="secondary" className="text-xs">Video</Badge>}
+                              </div>
+                            ) : (
+                              <Badge variant="outline">None</Badge>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* People Also Ask questions preview */}
+                    {results.serpPresence.peopleAlsoAsk.questions.length > 0 && (
+                      <div className="mt-6">
+                        <h4 className="font-medium text-sm mb-3">Related Questions:</h4>
+                        <div className="space-y-2">
+                          {results.serpPresence.peopleAlsoAsk.questions.slice(0, 3).map((question, index) => (
+                            <div key={index} className="text-sm p-2 bg-muted/50 rounded border-l-2 border-primary/30">
+                              {question}
+                            </div>
+                          ))}
+                          {results.serpPresence.peopleAlsoAsk.questions.length > 3 && (
+                            <div className="text-xs text-muted-foreground">
+                              +{results.serpPresence.peopleAlsoAsk.questions.length - 3} more questions
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Top Keywords */}
               <Card>
