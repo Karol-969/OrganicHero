@@ -2829,7 +2829,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Get authenticated user's connected platforms
    * GET /api/campaigns/me/platforms
    */
-  app.get('/api/campaigns/me/platforms', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
+  app.get('/api/campaigns/me/platforms', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user;
       const credentials = await storage.getPlatformCredentials(user.id);
@@ -2868,7 +2868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Disconnect a platform
    * DELETE /api/campaigns/me/platforms/:credentialId
    */
-  app.delete('/api/campaigns/me/platforms/:credentialId', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
+  app.delete('/api/campaigns/me/platforms/:credentialId', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
     try {
       const { credentialId } = req.params;
       const user = req.user;
@@ -2912,7 +2912,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Check platform connection status
    * GET /api/campaigns/me/platforms/:credentialId/status
    */
-  app.get('/api/campaigns/me/platforms/:credentialId/status', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
+  app.get('/api/campaigns/me/platforms/:credentialId/status', secureAuthenticateAPI, async (req: AuthenticatedRequest, res) => {
     try {
       const { credentialId } = req.params;
       const user = req.user;
