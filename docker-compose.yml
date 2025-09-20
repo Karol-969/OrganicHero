@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=postgresql://workflow_user:workflow_pass@db:5432/workflow_db
+      - JWT_SECRET=your-super-secure-jwt-secret-key-for-production-change-this
+      - API_KEY_SECRET=your-super-secure-api-key-secret-for-production-change-this
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./attached_assets:/app/attached_assets
+    restart: unless-stopped
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=workflow_user
+      - POSTGRES_PASSWORD=workflow_pass
+      - POSTGRES_DB=workflow_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U workflow_user -d workflow_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
