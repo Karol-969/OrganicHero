@@ -10,6 +10,8 @@ import ReactFlow, {
   Edge,
   Node,
   ReactFlowProvider,
+  Handle,
+  Position,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 
@@ -45,7 +47,7 @@ import {
 } from "lucide-react";
 
 // Google Ads Node Types
-export const GOOGLE_ADS_NODE_TYPES = {
+const GOOGLE_ADS_NODE_TYPES = {
   // Authentication & Setup
   CONNECT_ACCOUNT: 'google-ads-connect',
   ACCOUNT_INFO: 'google-ads-account-info',
@@ -102,7 +104,7 @@ export const GOOGLE_ADS_NODE_TYPES = {
 } as const;
 
 // Node Categories for the palette
-export const NODE_CATEGORIES = {
+const NODE_CATEGORIES = {
   'Authentication': [
     { type: GOOGLE_ADS_NODE_TYPES.CONNECT_ACCOUNT, label: 'Connect Account', icon: Database, color: 'blue' },
     { type: GOOGLE_ADS_NODE_TYPES.ACCOUNT_INFO, label: 'Account Info', icon: Settings, color: 'blue' },
@@ -159,44 +161,96 @@ export const NODE_CATEGORIES = {
   ],
 };
 
-// Custom Node Component
-function GoogleAdsNode({ data, selected }: { data: any; selected: boolean }) {
-  const IconComponent = data.icon || Workflow;
-  const colorClasses = {
-    blue: 'border-blue-500 bg-blue-50 dark:bg-blue-950',
-    green: 'border-green-500 bg-green-50 dark:bg-green-950',
-    yellow: 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950',
-    purple: 'border-purple-500 bg-purple-50 dark:bg-purple-950',
-    red: 'border-red-500 bg-red-50 dark:bg-red-950',
-    cyan: 'border-cyan-500 bg-cyan-50 dark:bg-cyan-950',
-    orange: 'border-orange-500 bg-orange-50 dark:bg-orange-950',
-    indigo: 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950',
-    pink: 'border-pink-500 bg-pink-50 dark:bg-pink-950',
-    emerald: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950',
-    gray: 'border-gray-500 bg-gray-50 dark:bg-gray-950',
-  };
+// Static color classes to avoid Tailwind purging issues
+const nodeColorClasses = {
+  blue: 'border-blue-500 bg-blue-50 dark:bg-blue-950',
+  green: 'border-green-500 bg-green-50 dark:bg-green-950',
+  yellow: 'border-yellow-500 bg-yellow-50 dark:bg-yellow-950',
+  purple: 'border-purple-500 bg-purple-50 dark:bg-purple-950',
+  red: 'border-red-500 bg-red-50 dark:bg-red-950',
+  cyan: 'border-cyan-500 bg-cyan-50 dark:bg-cyan-950',
+  orange: 'border-orange-500 bg-orange-50 dark:bg-orange-950',
+  indigo: 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950',
+  pink: 'border-pink-500 bg-pink-50 dark:bg-pink-950',
+  emerald: 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950',
+  gray: 'border-gray-500 bg-gray-50 dark:bg-gray-950',
+};
 
+const iconColorClasses = {
+  blue: 'bg-blue-500',
+  green: 'bg-green-500',
+  yellow: 'bg-yellow-500',
+  purple: 'bg-purple-500',
+  red: 'bg-red-500',
+  cyan: 'bg-cyan-500',
+  orange: 'bg-orange-500',
+  indigo: 'bg-indigo-500',
+  pink: 'bg-pink-500',
+  emerald: 'bg-emerald-500',
+  gray: 'bg-gray-500',
+};
+
+// Node Data Type
+interface NodeData {
+  label: string;
+  type: string;
+  icon: any;
+  color: string;
+  showConfig: boolean;
+  // Configuration fields
+  campaignName?: string;
+  campaignType?: string;
+  dailyBudget?: string;
+  seedKeywords?: string;
+  location?: string;
+  language?: string;
+  [key: string]: any;
+}
+
+// Custom Node Component
+function GoogleAdsNode({ data, selected }: { data: NodeData; selected: boolean }) {
+  const IconComponent = data.icon || Workflow;
+  
   return (
-    <Card className={`min-w-[200px] transition-all duration-200 ${selected ? 'ring-2 ring-primary' : ''} ${colorClasses[data.color as keyof typeof colorClasses] || colorClasses.gray}`} data-testid={`node-${data.type}`}>
-      <CardHeader className="pb-2">
-        <div className="flex items-center gap-2">
-          <div className={`p-1 rounded-md bg-${data.color}-500 text-white`}>
-            <IconComponent className="w-4 h-4" />
+    <div className="relative">
+      {/* Input Handle - Left side */}
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="input"
+        className="w-3 h-3 !bg-gray-400 !border-2 !border-white"
+        style={{ left: -6 }}
+        isConnectable={true}
+      />
+      
+      <Card className={`min-w-[200px] transition-all duration-200 ${selected ? 'ring-2 ring-primary' : ''} ${nodeColorClasses[data.color as keyof typeof nodeColorClasses] || nodeColorClasses.gray}`} data-testid={`node-${data.type}`}>
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <div className={`p-1 rounded-md text-white ${iconColorClasses[data.color as keyof typeof iconColorClasses] || iconColorClasses.gray}`}>
+              <IconComponent className="w-4 h-4" />
+            </div>
+            <CardTitle className="text-sm font-medium">{data.label}</CardTitle>
           </div>
-          <CardTitle className="text-sm font-medium">{data.label}</CardTitle>
-        </div>
-      </CardHeader>
-      {data.showConfig && (
-        <CardContent className="pt-0">
-          <div className="text-xs text-muted-foreground">
-            Configuration required
-          </div>
-        </CardContent>
-      )}
-      {/* Node handles for connections */}
-      <div className="absolute -left-2 top-1/2 w-4 h-4 bg-gray-400 rounded-full transform -translate-y-1/2" />
-      <div className="absolute -right-2 top-1/2 w-4 h-4 bg-gray-400 rounded-full transform -translate-y-1/2" />
-    </Card>
+        </CardHeader>
+        {data.showConfig && (
+          <CardContent className="pt-0">
+            <div className="text-xs text-muted-foreground">
+              Configuration required
+            </div>
+          </CardContent>
+        )}
+      </Card>
+      
+      {/* Output Handle - Right side */}
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="output"
+        className="w-3 h-3 !bg-gray-400 !border-2 !border-white"
+        style={{ right: -6 }}
+        isConnectable={true}
+      />
+    </div>
   );
 }
 
@@ -216,7 +270,7 @@ function WorkflowBuilderContent() {
   const [workflowName, setWorkflowName] = useState('My Google Ads Workflow');
   const [isRunning, setIsRunning] = useState(false);
   const [showConfig, setShowConfig] = useState(false);
-  const [selectedNode, setSelectedNode] = useState<Node | null>(null);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const onConnect = useCallback(
     (params: Connection) => setEdges((eds) => addEdge(params, eds)),
@@ -224,9 +278,12 @@ function WorkflowBuilderContent() {
   );
 
   const onNodeClick = useCallback((event: React.MouseEvent, node: Node) => {
-    setSelectedNode(node);
+    setSelectedNodeId(node.id);
     setShowConfig(true);
   }, []);
+
+  // Derive selected node from current nodes state
+  const selectedNode = selectedNodeId ? nodes.find(n => n.id === selectedNodeId) : null;
 
   const addNode = useCallback((nodeType: string, nodeData: any) => {
     const id = `${nodeType}-${Date.now()}`;
@@ -320,7 +377,7 @@ function WorkflowBuilderContent() {
                         onClick={() => addNode(nodeConfig.type, nodeConfig)}
                         data-testid={`button-add-${nodeConfig.type}`}
                       >
-                        <div className={`p-1 rounded-md bg-${nodeConfig.color}-500 text-white mr-3`}>
+                        <div className={`p-1 rounded-md text-white mr-3 ${iconColorClasses[nodeConfig.color as keyof typeof iconColorClasses] || iconColorClasses.gray}`}>
                           <IconComponent className="w-4 h-4" />
                         </div>
                         <div className="text-left">
@@ -355,6 +412,13 @@ function WorkflowBuilderContent() {
           nodeTypes={nodeTypes}
           fitView
           attributionPosition="bottom-left"
+          connectOnClick={true}
+          snapToGrid={true}
+          snapGrid={[15, 15]}
+          defaultEdgeOptions={{
+            animated: true,
+            style: { stroke: '#3b82f6', strokeWidth: 2 },
+          }}
         >
           <Background />
           <Controls />
@@ -416,11 +480,35 @@ function WorkflowBuilderContent() {
               <div className="space-y-4">
                 <div>
                   <Label>Campaign Name</Label>
-                  <Input placeholder="Enter campaign name" data-testid="input-campaign-name" />
+                  <Input 
+                    placeholder="Enter campaign name" 
+                    value={selectedNode.data.campaignName || ''}
+                    onChange={(e) => {
+                      setNodes((nds) =>
+                        nds.map((node) =>
+                          node.id === selectedNode.id
+                            ? { ...node, data: { ...node.data, campaignName: e.target.value } }
+                            : node
+                        )
+                      );
+                    }}
+                    data-testid="input-campaign-name" 
+                  />
                 </div>
                 <div>
                   <Label>Campaign Type</Label>
-                  <Select>
+                  <Select 
+                    value={selectedNode.data.campaignType || ''} 
+                    onValueChange={(value) => {
+                      setNodes((nds) =>
+                        nds.map((node) =>
+                          node.id === selectedNode.id
+                            ? { ...node, data: { ...node.data, campaignType: value } }
+                            : node
+                        )
+                      );
+                    }}
+                  >
                     <SelectTrigger data-testid="select-campaign-type">
                       <SelectValue placeholder="Select campaign type" />
                     </SelectTrigger>
@@ -434,7 +522,22 @@ function WorkflowBuilderContent() {
                 </div>
                 <div>
                   <Label>Daily Budget ($)</Label>
-                  <Input type="number" placeholder="10.00" data-testid="input-daily-budget" />
+                  <Input 
+                    type="number" 
+                    placeholder="Enter budget amount" 
+                    value={selectedNode.data.dailyBudget || ''}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      setNodes((nds) =>
+                        nds.map((node) =>
+                          node.id === selectedNode.id
+                            ? { ...node, data: { ...node.data, dailyBudget: value } }
+                            : node
+                        )
+                      );
+                    }}
+                    data-testid="input-daily-budget" 
+                  />
                 </div>
               </div>
             )}
@@ -445,16 +548,50 @@ function WorkflowBuilderContent() {
                   <Label>Seed Keywords</Label>
                   <Textarea 
                     placeholder="Enter keywords, one per line"
+                    value={selectedNode.data.seedKeywords || ''}
+                    onChange={(e) => {
+                      setNodes((nds) =>
+                        nds.map((node) =>
+                          node.id === selectedNode.id
+                            ? { ...node, data: { ...node.data, seedKeywords: e.target.value } }
+                            : node
+                        )
+                      );
+                    }}
                     data-testid="textarea-seed-keywords"
                   />
                 </div>
                 <div>
                   <Label>Location</Label>
-                  <Input placeholder="e.g., United States" data-testid="input-location" />
+                  <Input 
+                    placeholder="e.g., United States" 
+                    value={selectedNode.data.location || ''}
+                    onChange={(e) => {
+                      setNodes((nds) =>
+                        nds.map((node) =>
+                          node.id === selectedNode.id
+                            ? { ...node, data: { ...node.data, location: e.target.value } }
+                            : node
+                        )
+                      );
+                    }}
+                    data-testid="input-location" 
+                  />
                 </div>
                 <div>
                   <Label>Language</Label>
-                  <Select>
+                  <Select 
+                    value={selectedNode.data.language || ''} 
+                    onValueChange={(value) => {
+                      setNodes((nds) =>
+                        nds.map((node) =>
+                          node.id === selectedNode.id
+                            ? { ...node, data: { ...node.data, language: value } }
+                            : node
+                        )
+                      );
+                    }}
+                  >
                     <SelectTrigger data-testid="select-language">
                       <SelectValue placeholder="Select language" />
                     </SelectTrigger>
