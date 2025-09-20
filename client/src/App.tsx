@@ -8,6 +8,7 @@ import Analysis from "@/pages/analysis";
 import Pricing from "@/pages/pricing";
 import Subscribe from "@/pages/subscribe";
 import Campaigns from "@/pages/campaigns";
+import WorkflowBuilder from "@/pages/workflow-builder";
 import Auth from "@/pages/auth";
 import NotFound from "@/pages/not-found";
 
@@ -17,6 +18,7 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/analysis/:analysisId" component={Analysis} />
       <Route path="/campaigns" component={Campaigns} />
+      <Route path="/workflow" component={WorkflowBuilder} />
       <Route path="/auth" component={Auth} />
       <Route path="/pricing" component={Pricing} />
       <Route path="/subscribe" component={Subscribe} />
