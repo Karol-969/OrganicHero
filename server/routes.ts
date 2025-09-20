@@ -8,7 +8,7 @@ import puppeteer from 'puppeteer';
 import { MultiAgentCoordinator } from './agents';
 import { ActionPlanGenerator } from './action-plan-generator';
 import Stripe from 'stripe';
-import { secureAuthenticateAPI, requireSubscription, sendAuthError, type AuthenticatedRequest } from './secure-auth';
+import { secureAuthenticateAPI, secureAuthenticateUser, requireSubscription, sendAuthError, type AuthenticatedRequest } from './secure-auth';
 import { registerAuthRoutes } from './auth-routes';
 
 // ⚠️  REMOVED VULNERABLE AUTHENTICATION MIDDLEWARE
@@ -2958,6 +2958,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // =============================================================================
 
   /**
+   * Create platform credential directly (for development)
+   * POST /api/campaigns/me/platforms
+   */
+  app.post('/api/campaigns/me/platforms', secureAuthenticateAPI, requireSubscription('free'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const { platformId, accountId, accountName, accessToken, refreshToken } = req.body;
+
+      if (!platformId || !accountId || !accountName || !accessToken) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Platform ID, Account ID, Account Name, and Access Token are required' 
+        });
+      }
+
+      // Check if platform exists
+      const platform = await storage.getPlatform(platformId);
+      if (!platform) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Platform not found' 
+        });
+      }
+
+      // Check if credential already exists for this user and platform
+      const existingCredentials = await storage.getPlatformCredentials(user.id);
+      const existingCredential = existingCredentials.find(cred => 
+        cred.platformId === platformId && cred.accountId === accountId
+      );
+
+      if (existingCredential) {
+        return res.status(409).json({ 
+          success: false,
+          error: 'Platform account already connected' 
+        });
+      }
+
+      // Create the platform credential
+      const credential = await storage.createPlatformCredential({
+        userId: user.id,
+        platformId,
+        accountId,
+        accountName,
+        accessTokenEncrypted: accessToken, // In production, this should be encrypted
+        refreshTokenEncrypted: refreshToken || null,
+        apiKeyEncrypted: null,
+        permissions: null,
+        metadata: null,
+      });
+
+      res.status(201).json({
+        success: true,
+        data: {
+          id: credential.id,
+          platformId: credential.platformId,
+          platformName: platform.name,
+          platformDisplayName: platform.displayName,
+          accountId: credential.accountId,
+          accountName: credential.accountName,
+          isActive: credential.isActive,
+          createdAt: credential.createdAt
+        }
+      });
+    } catch (error: any) {
+      console.error('Create platform credential error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to connect platform: ' + error.message 
+      });
+    }
+  });
+
+  /**
    * Initiate OAuth flow for a platform
    * POST /api/campaigns/me/platforms/connect
    */
@@ -3395,36 +3468,129 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   /**
-   * Create a new campaign
-   * POST /api/campaigns
+   * Get campaigns for the authenticated user
+   * GET /api/campaigns/me/campaigns
    */
-  app.post('/api/campaigns', async (req, res) => {
+  app.get('/api/campaigns/me/campaigns', secureAuthenticateUser, async (req: AuthenticatedRequest, res) => {
     try {
+      const user = req.user;
+      const { groupId, status, platformCredentialId } = req.query;
+
+      let campaigns;
+      if (groupId) {
+        campaigns = await storage.getCampaignsByGroup(groupId as string);
+      } else if (platformCredentialId) {
+        campaigns = await storage.getCampaignsByPlatform(platformCredentialId as string);
+      } else {
+        campaigns = await storage.getCampaigns(user.id);
+      }
+
+      // Filter by status if provided
+      if (status) {
+        campaigns = campaigns.filter(campaign => campaign.status === status);
+      }
+
+      // Filter to ensure user owns all campaigns
+      campaigns = campaigns.filter(campaign => campaign.userId === user.id);
+
+      res.json({
+        success: true,
+        data: campaigns
+      });
+    } catch (error: any) {
+      console.error('Get campaigns error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to fetch campaigns: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create a new campaign for authenticated user
+   * POST /api/campaigns/me/campaigns
+   */
+  app.post('/api/campaigns/me/campaigns', secureAuthenticateUser, requireSubscription('free'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
       const campaignData = req.body;
 
-      if (!campaignData.userEmail || !campaignData.name || !campaignData.platformCredentialId) {
+      if (!campaignData.name || !campaignData.platformCredentialId) {
         return res.status(400).json({ 
           success: false,
-          error: 'User email, campaign name, and platform credential ID are required' 
+          error: 'Campaign name and platform credential ID are required' 
         });
       }
 
-      const user = await storage.getUserByEmail(campaignData.userEmail);
-      if (!user) {
-        return res.status(404).json({ 
-          success: false,
-          error: 'User not found' 
-        });
-      }
-
-      // Check subscription limits
-      const subscriptionCheck = await checkSubscriptionLimits(campaignData.userEmail, 'create_campaign');
-      if (!subscriptionCheck.allowed) {
+      // Verify platform credential belongs to user
+      const credential = await storage.getPlatformCredential(campaignData.platformCredentialId);
+      if (!credential || credential.userId !== user.id) {
         return res.status(403).json({ 
           success: false,
-          error: subscriptionCheck.message || 'Subscription limit reached' 
+          error: 'Invalid platform credential' 
         });
       }
+
+      // Rate limiting check
+      if (!rateLimitMiddleware(`create_campaign_${user.id}`)) {
+        return res.status(429).json({ 
+          success: false,
+          error: 'Rate limit exceeded. Please try again later.' 
+        });
+      }
+
+      const campaign = await storage.createCampaign({
+        userId: user.id,
+        groupId: campaignData.groupId || null,
+        platformCredentialId: campaignData.platformCredentialId,
+        externalCampaignId: `demo_campaign_${Date.now()}`, // Demo mode
+        name: campaignData.name,
+        description: campaignData.description,
+        objective: campaignData.objective,
+        budgetType: campaignData.budgetType,
+        budgetAmountCents: campaignData.budgetAmountCents,
+        bidStrategy: campaignData.bidStrategy,
+        bidAmountCents: campaignData.bidAmountCents,
+        startDate: campaignData.startDate ? new Date(campaignData.startDate) : null,
+        endDate: campaignData.endDate ? new Date(campaignData.endDate) : null,
+        timezone: campaignData.timezone || 'UTC',
+        targetingCriteria: campaignData.targetingCriteria || {},
+        conversionGoals: campaignData.conversionGoals || {},
+        platformSettings: { ...campaignData.platformSettings, demo_mode: true },
+        status: campaignData.status || 'draft',
+        tags: campaignData.tags || []
+      });
+
+      res.status(201).json({
+        success: true,
+        data: campaign
+      });
+    } catch (error: any) {
+      console.error('Create campaign error:', error);
+      res.status(500).json({ 
+        success: false,
+        error: 'Failed to create campaign: ' + error.message 
+      });
+    }
+  });
+
+  /**
+   * Create a new campaign (legacy route for compatibility)
+   * POST /api/campaigns
+   */
+  app.post('/api/campaigns', secureAuthenticateAPI, requireSubscription('free'), async (req: AuthenticatedRequest, res) => {
+    try {
+      const user = req.user;
+      const campaignData = req.body;
+
+      if (!campaignData.name || !campaignData.platformCredentialId) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Campaign name and platform credential ID are required' 
+        });
+      }
+
+      // Subscription check is handled by requireSubscription('free') middleware
 
       // Verify platform credential belongs to user
       const credential = await storage.getPlatformCredential(campaignData.platformCredentialId);

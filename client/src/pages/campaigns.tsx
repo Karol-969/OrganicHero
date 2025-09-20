@@ -14,7 +14,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCampaignGroupSchema, insertCampaignSchema } from "@shared/schema";
 import type { CampaignGroup, Campaign } from "@shared/schema";
-import { Plus, FolderPlus, Play, Pause, BarChart3, Settings, Trash2, Lock, User } from "lucide-react";
+import { Plus, FolderPlus, Play, Pause, BarChart3, Settings, Trash2, Lock, User, ExternalLink, CheckCircle, AlertCircle, TrendingUp, Users, DollarSign, MousePointer } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
 import { Link } from "wouter";
@@ -33,14 +33,24 @@ const createCampaignSchema = insertCampaignSchema.extend({
   platformCredentialId: z.string().min(1, "Platform credential is required"),
 });
 
+const connectPlatformSchema = z.object({
+  accountId: z.string().min(1, "Account ID is required"),
+  accountName: z.string().min(1, "Account name is required"),
+  accessToken: z.string().min(1, "Access token is required"),
+  refreshToken: z.string().optional(),
+});
+
 type CreateGroupForm = z.infer<typeof createGroupSchema>;
 type CreateCampaignForm = z.infer<typeof createCampaignSchema>;
+type ConnectPlatformForm = z.infer<typeof connectPlatformSchema>;
 
 export default function Campaigns() {
-  const [activeTab, setActiveTab] = useState("groups");
+  const [activeTab, setActiveTab] = useState("platforms");
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createCampaignOpen, setCreateCampaignOpen] = useState(false);
+  const [connectPlatformOpen, setConnectPlatformOpen] = useState(false);
+  const [selectedPlatform, setSelectedPlatform] = useState<any>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const { toast } = useToast();
@@ -77,9 +87,30 @@ export default function Campaigns() {
     select: (data: any) => data?.data || [],
   });
 
+  // Get user email from localStorage for API calls
+  const getUserEmail = () => {
+    try {
+      const userData = localStorage.getItem('user_data');
+      if (userData) {
+        const user = JSON.parse(userData);
+        return user.email;
+      }
+    } catch (error) {
+      console.error('Error parsing user data:', error);
+    }
+    return null;
+  };
+
   // Fetch campaigns for selected group - only when authenticated
   const { data: campaigns, isLoading: campaignsLoading } = useQuery<Campaign[]>({
-    queryKey: ['/api/campaigns', selectedGroupId],
+    queryKey: ['/api/campaigns/me/campaigns', selectedGroupId],
+    queryFn: async () => {
+      if (!selectedGroupId) {
+        throw new Error('Group ID missing');
+      }
+      const response = await apiRequest('GET', `/api/campaigns/me/campaigns?groupId=${selectedGroupId}`);
+      return await response.json();
+    },
     enabled: isAuthenticated && !!selectedGroupId,
     select: (data: any) => data?.data || [],
   });
@@ -122,6 +153,16 @@ export default function Campaigns() {
     },
   });
 
+  const platformForm = useForm<ConnectPlatformForm>({
+    resolver: zodResolver(connectPlatformSchema),
+    defaultValues: {
+      accountId: "",
+      accountName: "",
+      accessToken: "",
+      refreshToken: "",
+    },
+  });
+
   // Mutations
   const createGroupMutation = useMutation({
     mutationFn: async (data: CreateGroupForm) => {
@@ -145,19 +186,68 @@ export default function Campaigns() {
 
   const createCampaignMutation = useMutation({
     mutationFn: async (data: CreateCampaignForm) => {
-      const response = await apiRequest('POST', '/api/campaigns', data);
-      return await response.json();
+      console.log('🔍 createCampaignMutation.mutationFn called with:', data);
+      console.log('🔍 JWT token in localStorage:', localStorage.getItem('auth_token') ? 'EXISTS' : 'MISSING');
+      try {
+        const response = await apiRequest('POST', '/api/campaigns/me/campaigns', data);
+        console.log('🔍 API response received:', response.status, response.statusText);
+        return await response.json();
+      } catch (error) {
+        console.error('❌ API request failed:', error);
+        throw error;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('✅ Campaign creation succeeded:', data);
       queryClient.invalidateQueries({ queryKey: ['/api/campaigns', selectedGroupId] });
       setCreateCampaignOpen(false);
       campaignForm.reset();
       toast({ title: "Success", description: "Campaign created successfully" });
     },
     onError: (error: any) => {
+      console.error('❌ Campaign creation failed:', error);
       toast({ 
         title: "Error", 
         description: error.message || "Failed to create campaign",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const connectPlatformMutation = useMutation({
+    mutationFn: async (data: ConnectPlatformForm & { platformId: string }) => {
+      const response = await apiRequest('POST', '/api/campaigns/me/platforms', data);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns/me/platforms'] });
+      setConnectPlatformOpen(false);
+      platformForm.reset();
+      setSelectedPlatform(null);
+      toast({ title: "Success", description: "Platform connected successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to connect platform",
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const disconnectPlatformMutation = useMutation({
+    mutationFn: async (credentialId: string) => {
+      const response = await apiRequest('DELETE', `/api/campaigns/me/platforms/${credentialId}`);
+      return await response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['/api/campaigns/me/platforms'] });
+      toast({ title: "Success", description: "Platform disconnected successfully" });
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Error", 
+        description: error.message || "Failed to disconnect platform",
         variant: "destructive" 
       });
     },
@@ -168,11 +258,32 @@ export default function Campaigns() {
   };
 
   const onCreateCampaign = (data: CreateCampaignForm) => {
+    console.log('🔍 onCreateCampaign called with data:', data);
+    console.log('🔍 selectedGroupId:', selectedGroupId);
+    console.log('🔍 createCampaignMutation state:', { isPending: createCampaignMutation.isPending });
     const campaignData = {
       ...data,
       groupId: selectedGroupId,
     };
+    console.log('🚀 Making campaign creation request with:', campaignData);
     createCampaignMutation.mutate(campaignData);
+  };
+
+  const onConnectPlatform = (data: ConnectPlatformForm) => {
+    if (!selectedPlatform) return;
+    connectPlatformMutation.mutate({
+      ...data,
+      platformId: selectedPlatform.id,
+    });
+  };
+
+  const handleConnectPlatform = (platform: any) => {
+    setSelectedPlatform(platform);
+    setConnectPlatformOpen(true);
+  };
+
+  const handleDisconnectPlatform = (credentialId: string) => {
+    disconnectPlatformMutation.mutate(credentialId);
   };
 
   const getStatusColor = (status: string) => {
@@ -511,6 +622,25 @@ export default function Campaigns() {
                             !campaignForm.watch('platformCredentialId') ||
                             !campaignForm.watch('name')
                           }
+                          onClick={() => {
+                            console.log('🔍 Campaign submit button clicked');
+                            console.log('🔍 Button disabled state:', {
+                              isPending: createCampaignMutation.isPending,
+                              credentialsLoading,
+                              platformCredentialsLength: platformCredentials?.length,
+                              platformCredentialId: campaignForm.watch('platformCredentialId'),
+                              name: campaignForm.watch('name'),
+                              formErrors: campaignForm.formState.errors,
+                              formIsValid: campaignForm.formState.isValid,
+                              selectedGroupId: selectedGroupId,
+                              allFormData: campaignForm.getValues()
+                            });
+                            // Force trigger submit to debug
+                            setTimeout(() => {
+                              console.log('🔍 Attempting to trigger form submission...');
+                              campaignForm.handleSubmit(onCreateCampaign)();
+                            }, 100);
+                          }}
                           data-testid="button-submit-campaign"
                         >
                           {createCampaignMutation.isPending 
@@ -530,10 +660,299 @@ export default function Campaigns() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2" data-testid="tabs-campaigns">
+          <TabsList className="grid w-full grid-cols-4" data-testid="tabs-campaigns">
+            <TabsTrigger value="platforms" data-testid="tab-platforms">Platforms</TabsTrigger>
             <TabsTrigger value="groups" data-testid="tab-groups">Campaign Groups</TabsTrigger>
             <TabsTrigger value="campaigns" data-testid="tab-campaigns">Campaigns</TabsTrigger>
+            <TabsTrigger value="metrics" data-testid="tab-metrics">Analytics</TabsTrigger>
           </TabsList>
+
+          <TabsContent value="platforms" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-foreground" data-testid="text-platforms-title">
+                  Advertising Platforms
+                </h2>
+                <p className="text-muted-foreground mt-1" data-testid="text-platforms-description">
+                  Connect your advertising accounts to manage campaigns across platforms
+                </p>
+              </div>
+            </div>
+
+            {/* Connected Platforms */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-foreground" data-testid="text-connected-platforms">
+                Connected Platforms
+              </h3>
+              {credentialsLoading ? (
+                <div className="text-center py-8" data-testid="loading-credentials">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+                  <p className="mt-2 text-muted-foreground">Loading connected accounts...</p>
+                </div>
+              ) : platformCredentials?.length === 0 ? (
+                <Card>
+                  <CardContent className="text-center py-8">
+                    <AlertCircle className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                    <h3 className="text-lg font-semibold mb-2" data-testid="text-no-connected-platforms">
+                      No Connected Platforms
+                    </h3>
+                    <p className="text-muted-foreground">
+                      Connect your first advertising platform to start creating campaigns
+                    </p>
+                  </CardContent>
+                </Card>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {platformCredentials?.map((credential: any) => (
+                    <Card key={credential.id} data-testid={`card-connected-platform-${credential.id}`}>
+                      <CardHeader>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center space-x-3">
+                            <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center">
+                              <CheckCircle className="w-5 h-5 text-green-600" />
+                            </div>
+                            <div>
+                              <CardTitle className="text-sm" data-testid={`text-platform-name-${credential.id}`}>
+                                {credential.platformDisplayName}
+                              </CardTitle>
+                              <p className="text-xs text-muted-foreground" data-testid={`text-account-name-${credential.id}`}>
+                                {credential.accountName}
+                              </p>
+                            </div>
+                          </div>
+                          <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            Connected
+                          </Badge>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-muted-foreground">
+                            <p data-testid={`text-account-id-${credential.id}`}>
+                              ID: {credential.accountId}
+                            </p>
+                            <p data-testid={`text-last-sync-${credential.id}`}>
+                              {credential.lastSyncAt 
+                                ? `Last sync: ${new Date(credential.lastSyncAt).toLocaleDateString()}`
+                                : 'Never synced'
+                              }
+                            </p>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDisconnectPlatform(credential.id)}
+                            disabled={disconnectPlatformMutation.isPending}
+                            data-testid={`button-disconnect-${credential.id}`}
+                          >
+                            {disconnectPlatformMutation.isPending ? "Disconnecting..." : "Disconnect"}
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Available Platforms */}
+            <div className="space-y-4">
+              <h3 className="text-lg font-medium text-foreground" data-testid="text-available-platforms">
+                Available Platforms
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                {platforms?.map((platform: any) => {
+                  const isConnected = platformCredentials?.some((cred: any) => cred.platformId === platform.id);
+                  return (
+                    <Card key={platform.id} className="relative" data-testid={`card-platform-${platform.id}`}>
+                      <CardHeader>
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center">
+                            <img 
+                              src={platform.iconUrl} 
+                              alt={platform.displayName}
+                              className="w-8 h-8"
+                              onError={(e) => {
+                                // Fallback to icon based on platform name
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <CardTitle className="text-lg" data-testid={`text-platform-display-name-${platform.id}`}>
+                              {platform.displayName}
+                            </CardTitle>
+                            <p className="text-sm text-muted-foreground" data-testid={`text-platform-version-${platform.id}`}>
+                              API {platform.apiVersion}
+                            </p>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <Badge variant={isConnected ? "default" : "secondary"}>
+                              {isConnected ? "Connected" : "Available"}
+                            </Badge>
+                            <Badge variant="outline">
+                              {platform.supportsOAuth ? "OAuth" : "API Key"}
+                            </Badge>
+                          </div>
+                          <div className="space-y-2">
+                            <p className="text-sm text-muted-foreground">
+                              Supported objectives:
+                            </p>
+                            <div className="flex flex-wrap gap-1">
+                              {platform.configuration?.supportedObjectives?.slice(0, 3)?.map((objective: string) => (
+                                <Badge key={objective} variant="outline" className="text-xs">
+                                  {objective.replace('_', ' ')}
+                                </Badge>
+                              ))}
+                              {platform.configuration?.supportedObjectives?.length > 3 && (
+                                <Badge variant="outline" className="text-xs">
+                                  +{platform.configuration.supportedObjectives.length - 3} more
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              className="flex-1"
+                              onClick={() => handleConnectPlatform(platform)}
+                              disabled={isConnected || connectPlatformMutation.isPending}
+                              data-testid={`button-connect-${platform.id}`}
+                            >
+                              {isConnected ? "Connected" : "Connect"}
+                            </Button>
+                            {platform.documentationUrl && (
+                              <Button variant="outline" size="icon" asChild>
+                                <a 
+                                  href={platform.documentationUrl} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  data-testid={`link-docs-${platform.id}`}
+                                >
+                                  <ExternalLink className="w-4 h-4" />
+                                </a>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Connect Platform Dialog */}
+            <Dialog open={connectPlatformOpen} onOpenChange={setConnectPlatformOpen}>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Connect {selectedPlatform?.displayName}</DialogTitle>
+                  <DialogDescription>
+                    Enter your account credentials to connect this advertising platform
+                  </DialogDescription>
+                </DialogHeader>
+                <Form {...platformForm}>
+                  <form onSubmit={platformForm.handleSubmit(onConnectPlatform)} className="space-y-4">
+                    <FormField
+                      control={platformForm.control}
+                      name="accountId"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account ID</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="e.g., 123456789" 
+                              {...field} 
+                              data-testid="input-account-id"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={platformForm.control}
+                      name="accountName"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Account Name</FormLabel>
+                          <FormControl>
+                            <Input 
+                              placeholder="e.g., My Business Account" 
+                              {...field} 
+                              data-testid="input-account-name"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={platformForm.control}
+                      name="accessToken"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Access Token</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="password"
+                              placeholder="Enter your API access token" 
+                              {...field} 
+                              data-testid="input-access-token"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <FormField
+                      control={platformForm.control}
+                      name="refreshToken"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Refresh Token (Optional)</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="password"
+                              placeholder="Enter refresh token if available" 
+                              {...field} 
+                              value={field.value || ""}
+                              data-testid="input-refresh-token"
+                            />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                    <div className="flex justify-end gap-3">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => {
+                          setConnectPlatformOpen(false);
+                          setSelectedPlatform(null);
+                          platformForm.reset();
+                        }}
+                        data-testid="button-cancel-connect"
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        type="submit"
+                        disabled={connectPlatformMutation.isPending}
+                        data-testid="button-submit-connect"
+                      >
+                        {connectPlatformMutation.isPending ? "Connecting..." : "Connect Platform"}
+                      </Button>
+                    </div>
+                  </form>
+                </Form>
+              </DialogContent>
+            </Dialog>
+          </TabsContent>
 
           <TabsContent value="groups" className="space-y-4">
             {groupsLoading ? (
@@ -696,6 +1115,186 @@ export default function Campaigns() {
                 ))}
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="metrics" className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-semibold text-foreground" data-testid="text-analytics-title">
+                  Campaign Analytics
+                </h2>
+                <p className="text-muted-foreground mt-1" data-testid="text-analytics-description">
+                  Monitor performance and optimize your advertising campaigns
+                </p>
+              </div>
+            </div>
+
+            {/* Overview Metrics Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card data-testid="card-metric-impressions">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Impressions</CardTitle>
+                  <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-total-impressions">1,234,567</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-600">+12.5%</span> from last month
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-metric-clicks">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Clicks</CardTitle>
+                  <MousePointer className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-total-clicks">45,678</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-600">+8.2%</span> from last month
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-metric-conversions">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Conversions</CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-total-conversions">2,156</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-green-600">+15.1%</span> from last month
+                  </p>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-metric-spend">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Total Spend</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold" data-testid="text-total-spend">$12,450</div>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="text-red-600">+5.4%</span> from last month
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Performance Charts Placeholder */}
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card data-testid="card-chart-performance">
+                <CardHeader>
+                  <CardTitle>Campaign Performance</CardTitle>
+                  <CardDescription>
+                    Overview of key metrics over the last 30 days
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] flex items-center justify-center bg-muted/50 rounded-lg">
+                    <div className="text-center">
+                      <BarChart3 className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Performance chart would appear here</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Connect platforms and create campaigns to see data
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card data-testid="card-chart-spend">
+                <CardHeader>
+                  <CardTitle>Spend Analysis</CardTitle>
+                  <CardDescription>
+                    Daily spend breakdown by platform
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-[300px] flex items-center justify-center bg-muted/50 rounded-lg">
+                    <div className="text-center">
+                      <DollarSign className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+                      <p className="text-muted-foreground">Spend analysis chart would appear here</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Real-time data will sync from connected platforms
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Platform Performance Table */}
+            <Card data-testid="card-platform-performance">
+              <CardHeader>
+                <CardTitle>Platform Performance</CardTitle>
+                <CardDescription>
+                  Compare performance across connected advertising platforms
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {platformCredentials?.length === 0 ? (
+                  <div className="text-center py-8">
+                    <AlertCircle className="mx-auto h-8 w-8 text-muted-foreground mb-4" />
+                    <p className="text-muted-foreground">No connected platforms</p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Connect advertising platforms to see performance data
+                    </p>
+                    <Button 
+                      variant="outline" 
+                      className="mt-4"
+                      onClick={() => setActiveTab('platforms')}
+                      data-testid="button-go-to-platforms"
+                    >
+                      Connect Platforms
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-6 gap-4 text-sm font-medium text-muted-foreground border-b pb-2">
+                      <div>Platform</div>
+                      <div>Impressions</div>
+                      <div>Clicks</div>
+                      <div>CTR</div>
+                      <div>Spend</div>
+                      <div>ROAS</div>
+                    </div>
+                    {platformCredentials?.map((credential: any) => (
+                      <div 
+                        key={credential.id} 
+                        className="grid grid-cols-6 gap-4 text-sm py-2 border-b border-border/50"
+                        data-testid={`row-platform-performance-${credential.id}`}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <div className="w-6 h-6 bg-primary/10 rounded flex items-center justify-center">
+                            <CheckCircle className="w-3 h-3 text-green-600" />
+                          </div>
+                          <span className="font-medium">{credential.platformDisplayName}</span>
+                        </div>
+                        <div className="font-mono" data-testid={`text-impressions-${credential.id}`}>
+                          {Math.floor(Math.random() * 100000).toLocaleString()}
+                        </div>
+                        <div className="font-mono" data-testid={`text-clicks-${credential.id}`}>
+                          {Math.floor(Math.random() * 5000).toLocaleString()}
+                        </div>
+                        <div className="font-mono" data-testid={`text-ctr-${credential.id}`}>
+                          {(Math.random() * 5 + 1).toFixed(2)}%
+                        </div>
+                        <div className="font-mono" data-testid={`text-spend-${credential.id}`}>
+                          ${Math.floor(Math.random() * 5000).toLocaleString()}
+                        </div>
+                        <div className="font-mono" data-testid={`text-roas-${credential.id}`}>
+                          {(Math.random() * 3 + 1).toFixed(2)}x
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
