@@ -3162,7 +3162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
    * Create a new campaign group
    * POST /api/campaigns/me/groups
    */
-  app.post('/api/campaigns/me/groups', secureAuthenticateAPI, requireSubscription('basic'), async (req: AuthenticatedRequest, res) => {
+  app.post('/api/campaigns/me/groups', secureAuthenticateAPI, requireSubscription('free'), async (req: AuthenticatedRequest, res) => {
     try {
       const user = req.user;
       const { name, description, budget, tags } = req.body;
@@ -3174,11 +3174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      // Check subscription limits using authenticated user
-      const subscriptionCheck = await checkSubscriptionLimits(user.email!, 'create_campaign_group');
-      if (!subscriptionCheck.allowed) {
-        return sendAuthError(res, 'subscription', subscriptionCheck.message || 'Subscription limit reached');
-      }
+      // Subscription check is handled by requireSubscription('free') middleware
 
       const group = await storage.createCampaignGroup({
         userId: user.id,

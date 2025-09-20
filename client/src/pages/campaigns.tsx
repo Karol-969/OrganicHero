@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,15 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertCampaignGroupSchema, insertCampaignSchema } from "@shared/schema";
 import type { CampaignGroup, Campaign } from "@shared/schema";
-import { Plus, FolderPlus, Play, Pause, BarChart3, Settings, Trash2 } from "lucide-react";
+import { Plus, FolderPlus, Play, Pause, BarChart3, Settings, Trash2, Lock, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { z } from "zod";
+import { Link } from "wouter";
 
 // Enhanced schemas for the forms
-const createGroupSchema = insertCampaignGroupSchema.extend({
+const createGroupSchema = insertCampaignGroupSchema.omit({
+  userId: true,
+}).extend({
   name: z.string().min(1, "Group name is required"),
 });
 
@@ -38,18 +41,46 @@ export default function Campaigns() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [createCampaignOpen, setCreateCampaignOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState(true);
   const { toast } = useToast();
 
-  // Fetch campaign groups
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = () => {
+      const token = localStorage.getItem('auth_token');
+      const userData = localStorage.getItem('user_data');
+      
+      if (token && userData) {
+        try {
+          JSON.parse(userData); // Validate userData is valid JSON
+          setIsAuthenticated(true);
+        } catch {
+          // Invalid user data, clear it
+          localStorage.removeItem('auth_token');
+          localStorage.removeItem('user_data');
+          setIsAuthenticated(false);
+        }
+      } else {
+        setIsAuthenticated(false);
+      }
+      setIsCheckingAuth(false);
+    };
+
+    checkAuth();
+  }, []);
+
+  // Fetch campaign groups - only when authenticated
   const { data: campaignGroups, isLoading: groupsLoading } = useQuery<CampaignGroup[]>({
     queryKey: ['/api/campaigns/me/groups'],
+    enabled: isAuthenticated,
     select: (data: any) => data?.data || [],
   });
 
-  // Fetch campaigns for selected group
+  // Fetch campaigns for selected group - only when authenticated
   const { data: campaigns, isLoading: campaignsLoading } = useQuery<Campaign[]>({
     queryKey: ['/api/campaigns', selectedGroupId],
-    enabled: !!selectedGroupId,
+    enabled: isAuthenticated && !!selectedGroupId,
     select: (data: any) => data?.data || [],
   });
 
@@ -59,9 +90,10 @@ export default function Campaigns() {
     select: (data: any) => data?.data || [],
   });
 
-  // Fetch user's platform credentials
+  // Fetch user's platform credentials - only when authenticated
   const { data: platformCredentials, isLoading: credentialsLoading } = useQuery<any[]>({
     queryKey: ['/api/campaigns/me/platforms'],
+    enabled: isAuthenticated,
     select: (data: any) => data?.data || [],
   });
 
@@ -158,6 +190,54 @@ export default function Campaigns() {
     const amount = budgetAmountCents / 100;
     return `$${amount.toFixed(2)} ${budgetType}`;
   };
+
+  // Show loading state while checking authentication
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show login prompt if not authenticated
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="container mx-auto px-6 py-8">
+          <div className="max-w-md mx-auto mt-16">
+            <Card>
+              <CardHeader className="text-center">
+                <div className="flex justify-center mb-4">
+                  <div className="bg-primary/10 p-3 rounded-full">
+                    <Lock className="w-6 h-6 text-primary" />
+                  </div>
+                </div>
+                <CardTitle className="text-2xl">Authentication Required</CardTitle>
+                <CardDescription>
+                  Please log in to access campaign management features
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="text-center text-sm text-muted-foreground mb-4">
+                  You need to be logged in to create and manage campaign groups
+                </div>
+                <Link href="/auth">
+                  <Button className="w-full" data-testid="button-go-to-login">
+                    <User className="w-4 h-4 mr-2" />
+                    Go to Login
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
